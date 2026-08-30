@@ -2,6 +2,7 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Collection, ChannelType } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+const { logEvent } = require('./bot-logger');
 
 const token = process.env.DISCORD_TOKEN?.trim();
 
@@ -36,7 +37,12 @@ client.once('ready', async () => {
   console.log(`✅ Bot başlatıldı: ${client.user.tag}`);
   console.log(`📝 ${client.commands.size} komut yüklendi`);
 
-  await setupKickAnnouncementChannel();
+  const guild = getTargetGuild();
+  await setupKickAnnouncementChannel(guild);
+  await setupBotLogChannel(guild);
+  await logEvent('startup', 'Bot Discord’a başarıyla bağlandı.', {
+    Sunucu: guild?.name || 'Bilinmiyor',
+  });
 });
 
 client.on('interactionCreate', async (interaction) => {
@@ -49,6 +55,10 @@ client.on('interactionCreate', async (interaction) => {
     await command.execute(interaction);
   } catch (error) {
     console.error('❌ Komut hatası:', error);
+    await logEvent('error', 'Komut çalıştırılırken hata oluştu.', {
+      Komut: interaction.commandName,
+      Hata: error.message,
+    });
 
     try {
       const reply = { content: '❌ Komut çalıştırılırken bir hata oluştu!', ephemeral: true };
@@ -62,6 +72,17 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 });
+
+function getTargetGuild() {
+  const configuredGuildId = process.env.DISCORD_GUILD_ID?.trim();
+  const guild = (configuredGuildId && client.guilds.cache.get(configuredGuildId)) || client.guilds.cache.first();
+
+  if (configuredGuildId && guild && guild.id !== configuredGuildId) {
+    console.warn('⚠️ DISCORD_GUILD_ID botun bulunduğu sunucular arasında bulunamadı; ilk sunucu kullanılacak.');
+  }
+
+  return guild;
+}
 
 function setEnvValue(content, key, value) {
   const lines = content.split(/\r?\n/);
@@ -78,84 +99,125 @@ function setEnvValue(content, key, value) {
   return lines.join('\n');
 }
 
-// Kick Duyuru Kanalı Oluştur veya mevcut kanalı bul
-async function setupKickAnnouncementChannel() {
-  try {
-    const configuredGuildId = process.env.DISCORD_GUILD_ID?.trim();
-    const guild = (configuredGuildId && client.guilds.cache.get(configuredGuildId)) || client.guilds.cache.first();
+function saveEnvValues(values) {
+  const envPath = path.join(__dirname, '.env');
+  let envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
 
+  for (const [key, value] of Object.entries(values)) {
+    envContent = setEnvValue(envContent, key, value);
+    process.env[key] = value;
+  }
+
+  fs.writeFileSync(envPath, envContent, 'utf8');
+}
+
+async function findOrCreateTextChannel(guild, channelName, topic, savedChannelId) {
+  const channelTypes = [ChannelType.GuildText, ChannelType.GuildAnnouncement];
+  let channel = null;
+
+  if (savedChannelId) {
+    channel = await guild.channels.fetch(savedChannelId).catch(() => null);
+    if (channel && !channelTypes.includes(channel.type)) {
+      channel = null;
+    }
+  }
+
+  if (!channel) {
+    const channels = await guild.channels.fetch();
+    channel = channels.find(
+      (item) => item.name === channelName && channelTypes.includes(item.type)
+    );
+  }
+
+  if (!channel) {
+    console.log(`📝 "${channelName}" kanalı oluşturuluyor...`);
+    channel = await guild.channels.create({
+      name: channelName,
+      type: ChannelType.GuildText,
+      topic,
+      reason: 'Duyuru Botu Kurulumu',
+    });
+    console.log(`✅ "${channelName}" kanalı başarıyla oluşturuldu!`);
+  } else {
+    console.log(`✅ Mevcut #${channel.name} kanalı kullanılıyor.`);
+  }
+
+  return channel;
+}
+
+async function findOrCreateWebhook(channel, webhookName, reason) {
+  const webhooks = await channel.fetchWebhooks();
+  let webhook = webhooks.find((item) => item.name === webhookName);
+
+  if (!webhook) {
+    console.log(`🔗 ${webhookName} webhook'u oluşturuluyor...`);
+    webhook = await channel.createWebhook({
+      name: webhookName,
+      reason,
+    });
+    console.log(`✅ ${webhookName} webhook'u oluşturuldu!`);
+  }
+
+  return webhook;
+}
+
+// Kick Duyuru Kanalı Oluştur veya mevcut kanalı bul
+async function setupKickAnnouncementChannel(guild) {
+  try {
     if (!guild) {
       console.log('⚠️ Bot henüz bir sunucuya eklenmedi');
       return;
     }
 
-    if (configuredGuildId && guild.id !== configuredGuildId) {
-      console.warn('⚠️ DISCORD_GUILD_ID botun bulunduğu sunucular arasında bulunamadı; ilk sunucu kullanılacak.');
-    }
+    const channel = await findOrCreateTextChannel(
+      guild,
+      'kick-duyuru',
+      '🎬 Kick yayın duyuruları - Burak yayına başladığında otomatik duyuru alırsınız',
+      process.env.DISCORD_KICK_CHANNEL_ID?.trim()
+    );
+    const webhook = await findOrCreateWebhook(
+      channel,
+      'Kick Monitor',
+      'Kick Duyuru Botu Webhook'
+    );
 
-    const channelName = 'kick-duyuru';
-    const channelTypes = [ChannelType.GuildText, ChannelType.GuildAnnouncement];
-    const savedChannelId = process.env.DISCORD_KICK_CHANNEL_ID?.trim();
-    let channel = null;
+    saveEnvValues({
+      DISCORD_KICK_CHANNEL_ID: channel.id,
+      DISCORD_WEBHOOK_URL: webhook.url,
+    });
 
-    // Önce .env içindeki ID ile bul; isim değişse bile aynı kanal korunur.
-    if (savedChannelId) {
-      channel = await guild.channels.fetch(savedChannelId).catch(() => null);
-      if (channel && !channelTypes.includes(channel.type)) {
-        channel = null;
-      }
-    }
-
-    // ID yoksa veya kanal silindiyse Discord'dan güncel kanal listesini çek.
-    if (!channel) {
-      const channels = await guild.channels.fetch();
-      channel = channels.find(
-        (item) => item.name === channelName && channelTypes.includes(item.type)
-      );
-    }
-
-    if (!channel) {
-      console.log(`📝 "${channelName}" kanalı oluşturuluyor...`);
-      channel = await guild.channels.create({
-        name: channelName,
-        type: ChannelType.GuildText,
-        topic: '🎬 Kick yayın duyuruları - Burak yayına başladığında otomatik duyuru alırsınız',
-        reason: 'Kick Duyuru Botu Kurulumu',
-      });
-      console.log(`✅ "${channelName}" kanalı başarıyla oluşturuldu!`);
-    } else {
-      console.log(`✅ Mevcut #${channel.name} kanalı kullanılıyor.`);
-    }
-
-    // Webhook oluştur veya mevcut webhook'u bul
-    const webhooks = await channel.fetchWebhooks();
-    let webhook = webhooks.find((item) => item.name === 'Kick Monitor');
-
-    if (!webhook) {
-      console.log('🔗 Webhook oluşturuluyor...');
-      webhook = await channel.createWebhook({
-        name: 'Kick Monitor',
-        reason: 'Kick Duyuru Botu Webhook',
-      });
-      console.log('✅ Webhook başarıyla oluşturuldu!');
-    }
-
-    // Kanal ID'sini ve webhook'u yerelde hatırla; sonraki açılışta tekrar kanal oluşturulmaz.
-    const envPath = path.join(__dirname, '.env');
-    let envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
-    envContent = setEnvValue(envContent, 'DISCORD_KICK_CHANNEL_ID', channel.id);
-    envContent = setEnvValue(envContent, 'DISCORD_WEBHOOK_URL', webhook.url);
-    fs.writeFileSync(envPath, envContent, 'utf8');
-
-    process.env.DISCORD_KICK_CHANNEL_ID = channel.id;
-    process.env.DISCORD_WEBHOOK_URL = webhook.url;
-
-    console.log('✅ .env dosyası güncellendi!');
-    console.log('\n🎯 Kick Duyuru Sistemi hazır!');
-    console.log(`   Kanal: #${channel.name}`);
-    console.log('   Webhook: Aktif\n');
+    console.log('✅ Kick duyuru ayarları hazır!');
   } catch (error) {
-    console.error('❌ Kanal oluşturma hatası:', error.message);
+    console.error('❌ Kick kanal oluşturma hatası:', error.message);
+    await logEvent('error', 'Kick duyuru kanalı hazırlanamadı.', { Hata: error.message });
+  }
+}
+
+// Bot log kanalı oluştur veya mevcut kanalı bul
+async function setupBotLogChannel(guild) {
+  try {
+    if (!guild) return;
+
+    const channel = await findOrCreateTextChannel(
+      guild,
+      'bot-log',
+      '🤖 Duyuru botu olay ve hata kayıtları',
+      process.env.DISCORD_LOG_CHANNEL_ID?.trim()
+    );
+    const webhook = await findOrCreateWebhook(
+      channel,
+      'Bot Logger',
+      'Duyuru Botu Log Webhook'
+    );
+
+    saveEnvValues({
+      DISCORD_LOG_CHANNEL_ID: channel.id,
+      DISCORD_LOG_WEBHOOK_URL: webhook.url,
+    });
+
+    console.log('✅ Bot log ayarları hazır!');
+  } catch (error) {
+    console.error('❌ Bot log kanalı oluşturma hatası:', error.message);
   }
 }
 
