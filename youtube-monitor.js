@@ -1,6 +1,6 @@
 require('dotenv').config();
 const axios = require('axios');
-const { parseString } = require('xml2js');
+const { parseStringPromise } = require('xml2js');
 const { WebhookClient, EmbedBuilder } = require('discord.js');
 
 // Konfigürasyon
@@ -23,46 +23,43 @@ async function checkYouTubeChannel() {
       },
     });
 
-    parseString(response.data, async (err, result) => {
-      if (err) {
-        console.error('❌ XML parse hatası:', err.message);
-        return;
-      }
+    const result = await parseStringPromise(response.data);
 
-      if (!result.feed || !result.feed.entry) {
-        console.log('⚠️ YouTube feed boş. Sonra tekrar deneyeceğiz...');
-        return;
-      }
+    if (!result.feed || !result.feed.entry) {
+      console.log('⚠️ YouTube feed boş. Sonra tekrar deneyeceğiz...');
+      return;
+    }
 
-      // En yeni videoyu al
-      const latestVideo = result.feed.entry[0];
-      const videoId = latestVideo['yt:videoId']?.[0];
-      const title = latestVideo.title?.[0];
-      const published = latestVideo.published?.[0];
-      const channelName = latestVideo['author']?.[0]?.['name']?.[0];
+    // En yeni videoyu al
+    const latestVideo = result.feed.entry[0];
+    const videoId = latestVideo['yt:videoId']?.[0];
+    const title = latestVideo.title?.[0];
+    const published = latestVideo.published?.[0];
+    const channelName = latestVideo.author?.[0]?.name?.[0];
 
-      if (!videoId || !title) {
-        console.log('⚠️ Video bilgileri eksik');
-        return;
-      }
+    if (!videoId || !title) {
+      console.log('⚠️ Video bilgileri eksik');
+      return;
+    }
 
-      // Yeni video mi kontrol et
-      if (!lastVideoIds.includes(videoId)) {
-        console.log(`✅ Yeni video bulundu: ${title}`);
-        await sendYouTubeNotification({
-          videoId,
-          title,
-          published,
-          channelName,
-        });
+    // Yeni video mu kontrol et
+    if (!lastVideoIds.includes(videoId)) {
+      console.log(`✅ Yeni video bulundu: ${title}`);
+      const sent = await sendYouTubeNotification({
+        videoId,
+        title,
+        published,
+        channelName,
+      });
 
+      if (sent) {
         lastVideoIds.unshift(videoId);
         // Son 5 video ID'sini tut
         if (lastVideoIds.length > 5) {
           lastVideoIds.pop();
         }
       }
-    });
+    }
   } catch (error) {
     console.error('❌ YouTube kontrol hatası:', error.message);
   }
@@ -90,18 +87,16 @@ async function sendYouTubeNotification(video) {
     .setTimestamp();
 
   try {
-    if (CONFIG.DISCORD_WEBHOOK_URL) {
-      const webhook = new WebhookClient({
-        url: CONFIG.DISCORD_WEBHOOK_URL,
-      });
-      await webhook.send({
-        content: '@everyone',
-        embeds: [embed],
-      });
-      console.log(`✅ YouTube duyuru gönderildi (${video.title})`);
-    }
+    const webhook = new WebhookClient({ url: CONFIG.DISCORD_WEBHOOK_URL });
+    await webhook.send({
+      content: '@everyone',
+      embeds: [embed],
+    });
+    console.log(`✅ YouTube duyuru gönderildi (${video.title})`);
+    return true;
   } catch (error) {
     console.error('❌ Discord mesaj gönderme hatası:', error.message);
+    return false;
   }
 }
 
