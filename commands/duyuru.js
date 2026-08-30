@@ -4,6 +4,7 @@ const {
   PermissionFlagsBits,
   ChannelType,
 } = require('discord.js');
+const { logEvent } = require('../bot-logger');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -54,12 +55,20 @@ module.exports = {
 
     try {
       await channel.send({ embeds: [embed] });
+      await logEvent('manual', interaction.user.tag + ' manuel duyuru gönderdi.', {
+        Kanal: channel.name,
+        Başlık: title,
+      });
       await interaction.reply({
-        content: `✅ Duyuru başarıyla ${channel} kanalına gönderildi!`,
+        content: '✅ Duyuru başarıyla ' + channel + ' kanalına gönderildi!',
         ephemeral: true,
       });
     } catch (error) {
       console.error('❌ Duyuru gönderme hatası:', error);
+      await logEvent('error', 'Manuel duyuru gönderilemedi.', {
+        Kanal: channel.name,
+        Hata: error.message,
+      });
       await interaction.reply({
         content: '❌ Duyuru gönderilirken bir hata oluştu. Botun kanalda mesaj gönderme yetkisini kontrol edin.',
         ephemeral: true,
