@@ -1,0 +1,31 @@
+{
+  "name": "discord-announcement-bot",
+  "version": "1.0.0",
+  "description": "Discord duyuru botu",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "nodemon bot.js",
+    "kick-monitor": "node kick-monitor.js",
+    "kick-monitor:dev": "nodemon kick-monitor.js",
+    "youtube-monitor": "node youtube-monitor.js",
+    "youtube-monitor:dev": "nodemon youtube-monitor.js",
+    "all-monitors": "npm run kick-monitor & npm run youtube-monitor"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "announcement"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.6.5",
+    "discord.js": "^14.14.0",
+    "dotenv": "^16.3.1",
+    "xml2js": "^0.6.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
