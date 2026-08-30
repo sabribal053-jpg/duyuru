@@ -3,6 +3,13 @@ const { Client, GatewayIntentBits, Collection, ChannelType } = require('discord.
 const fs = require('fs');
 const path = require('path');
 
+const token = process.env.DISCORD_TOKEN?.trim();
+
+if (!token || token === 'your_token_here') {
+  console.error('❌ DISCORD_TOKEN bulunamadı. Proje klasöründeki .env dosyasını kontrol edin.');
+  process.exit(1);
+}
+
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
 });
@@ -16,19 +23,24 @@ const commandFiles = fs.readdirSync(commandsPath).filter((file) => file.endsWith
 for (const file of commandFiles) {
   const filePath = path.join(commandsPath, file);
   const command = require(filePath);
+
+  if (!command.data?.name || typeof command.execute !== 'function') {
+    console.error(`⚠️ Geçersiz komut dosyası atlandı: ${file}`);
+    continue;
+  }
+
   client.commands.set(command.data.name, command);
 }
 
 client.once('ready', async () => {
   console.log(`✅ Bot başlatıldı: ${client.user.tag}`);
   console.log(`📝 ${client.commands.size} komut yüklendi`);
-  
-  // Kick Duyuru kanalını oluştur
+
   await setupKickAnnouncementChannel();
 });
 
 client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isCommand()) return;
+  if (!interaction.isChatInputCommand()) return;
 
   const command = client.commands.get(interaction.commandName);
   if (!command) return;
@@ -36,25 +48,40 @@ client.on('interactionCreate', async (interaction) => {
   try {
     await command.execute(interaction);
   } catch (error) {
-    console.error('Komut hatası:', error);
-    await interaction.reply({
-      content: '❌ Komut çalıştırılırken bir hata oluştu!',
-      ephemeral: true,
-    });
+    console.error('❌ Komut hatası:', error);
+
+    try {
+      const reply = { content: '❌ Komut çalıştırılırken bir hata oluştu!', ephemeral: true };
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp(reply);
+      } else {
+        await interaction.reply(reply);
+      }
+    } catch (replyError) {
+      console.error('❌ Hata mesajı gönderilemedi:', replyError.message);
+    }
   }
 });
 
 // Kick Duyuru Kanalı Oluştur
 async function setupKickAnnouncementChannel() {
   try {
-    const guild = client.guilds.cache.first();
+    const configuredGuildId = process.env.DISCORD_GUILD_ID?.trim();
+    const guild = (configuredGuildId && client.guilds.cache.get(configuredGuildId)) || client.guilds.cache.first();
+
     if (!guild) {
       console.log('⚠️ Bot henüz bir sunucuya eklenmedi');
       return;
     }
 
+    if (configuredGuildId && guild.id !== configuredGuildId) {
+      console.warn('⚠️ DISCORD_GUILD_ID botun bulunduğu sunucular arasında bulunamadı; ilk sunucu kullanılacak.');
+    }
+
     const channelName = 'kick-duyuru';
-    let channel = guild.channels.cache.find(ch => ch.name === channelName && ch.type === ChannelType.GuildText);
+    let channel = guild.channels.cache.find(
+      (ch) => ch.name === channelName && ch.type === ChannelType.GuildText
+    );
 
     if (!channel) {
       console.log(`📝 "${channelName}" kanalı oluşturuluyor...`);
@@ -69,7 +96,7 @@ async function setupKickAnnouncementChannel() {
 
     // Webhook oluştur veya mevcut webhook'u bul
     const webhooks = await channel.fetchWebhooks();
-    let webhook = webhooks.find(w => w.name === 'Kick Monitor');
+    let webhook = webhooks.find((item) => item.name === 'Kick Monitor');
 
     if (!webhook) {
       console.log('🔗 Webhook oluşturuluyor...');
@@ -80,29 +107,32 @@ async function setupKickAnnouncementChannel() {
       console.log('✅ Webhook başarıyla oluşturuldu!');
     }
 
-    // .env dosyasını güncelle
-    const webhookUrl = webhook.url;
+    // .env dosyasını güvenli şekilde güncelle
+    const webhookLine = 'DISCORD_WEBHOOK_URL=' + webhook.url;
     const envPath = path.join(__dirname, '.env');
-    let envContent = fs.readFileSync(envPath, 'utf-8');
+    let envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
 
-    if (!envContent.includes('DISCORD_WEBHOOK_URL=')) {
-      envContent += `\nDISCORD_WEBHOOK_URL=${webhookUrl}`;
+    if (/^DISCORD_WEBHOOK_URL\s*=.*$/m.test(envContent)) {
+      envContent = envContent.replace(/^DISCORD_WEBHOOK_URL\s*=.*$/m, () => webhookLine);
     } else {
-      envContent = envContent.replace(
-        /DISCORD_WEBHOOK_URL=.*/,
-        `DISCORD_WEBHOOK_URL=${webhookUrl}`
-      );
+      envContent = envContent.replace(/\s*$/, '') + '\n' + webhookLine + '\n';
     }
 
-    fs.writeFileSync(envPath, envContent);
+    fs.writeFileSync(envPath, envContent, 'utf8');
     console.log('✅ .env dosyası güncellendi!');
     console.log('\n🎯 Kick Duyuru Sistemi hazır!');
     console.log(`   Kanal: #${channel.name}`);
-    console.log(`   Webhook: Aktif\n`);
-
+    console.log('   Webhook: Aktif\n');
   } catch (error) {
     console.error('❌ Kanal oluşturma hatası:', error.message);
   }
 }
 
-client.login(process.env.DISCORD_TOKEN);
+client.login(token).catch((error) => {
+  if (error.code === 'TokenInvalid') {
+    console.error('❌ Discord token geçersiz. Developer Portal’dan yeni token alıp .env dosyasını güncelleyin.');
+  } else {
+    console.error('❌ Discord’a bağlanılamadı:', error.message);
+  }
+  process.exitCode = 1;
+});
