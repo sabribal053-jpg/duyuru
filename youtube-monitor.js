@@ -3,6 +3,7 @@ const axios = require('axios');
 const { parseStringPromise } = require('xml2js');
 const { WebhookClient, EmbedBuilder } = require('discord.js');
 const { loadState, updateState } = require('./monitor-state');
+const { logEvent } = require('./bot-logger');
 
 // Konfigürasyon
 const CONFIG = {
@@ -96,6 +97,10 @@ async function checkYouTubeChannel() {
           lastCheckAt: checkedAt,
           lastNotificationAt: checkedAt,
           lastError: null,
+        });
+        await logEvent('youtube', 'Yeni YouTube videosu duyuruldu.', {
+          Video: title,
+          Kanal: channelName || CONFIG.YOUTUBE_USERNAME,
         });
       } else {
         updateState('youtube', {
