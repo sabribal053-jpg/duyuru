@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node bot.js",
     "dev": "nodemon bot.js",
+    "deploy-commands": "node deploy-commands.js",
     "kick-monitor": "node kick-monitor.js",
     "kick-monitor:dev": "nodemon kick-monitor.js",
     "youtube-monitor": "node youtube-monitor.js",
