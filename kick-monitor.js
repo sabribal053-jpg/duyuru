@@ -17,8 +17,8 @@ if (!CONFIG.DISCORD_WEBHOOK_URL) {
   process.exit(1);
 }
 
-// Durum takibi
-let lastStreamStatus = null;
+// Durum takibi: ilk kontrol offline ise sonraki yayın yine bildirilir.
+let lastStreamStatus = false;
 
 async function checkKickStream() {
   try {
@@ -26,22 +26,22 @@ async function checkKickStream() {
       `https://kick.com/api/v1/channels/${CONFIG.KICK_USERNAME}`
     );
 
-    // API direkt kanal objesini dönüyor, data wrapper'ı yok
+    // API direkt kanal objesini döndürüyor; yayın yoksa livestream null olur.
     const channel = response.data;
-    
-    if (!channel || !channel.livestream) {
-      console.log('⚠️ Kick API veri döndürmedi. Sonra tekrar deneyeceğiz...');
+    if (!channel || typeof channel !== 'object' || !Object.prototype.hasOwnProperty.call(channel, 'livestream')) {
+      console.log('⚠️ Kick API beklenmeyen veri döndürdü. Sonra tekrar deneyeceğiz...');
       return;
     }
-    
-    const isLive = channel.livestream !== null && channel.livestream !== undefined;
+
+    const stream = channel.livestream;
+    const isLive = Boolean(stream);
 
     if (isLive && !lastStreamStatus) {
-      // Yayın başladı!
-      await sendDiscordNotification(channel);
-      lastStreamStatus = true;
+      const sent = await sendDiscordNotification(channel);
+      if (sent) {
+        lastStreamStatus = true;
+      }
     } else if (!isLive && lastStreamStatus) {
-      // Yayın bitti
       lastStreamStatus = false;
       console.log(`🔴 ${CONFIG.KICK_USERNAME} yayını sonlandırdı`);
     }
@@ -53,35 +53,36 @@ async function checkKickStream() {
 async function sendDiscordNotification(channel) {
   const stream = channel.livestream;
   const streamUrl = `https://kick.com/${CONFIG.KICK_USERNAME}`;
+  const thumbnailUrl = stream.thumbnail?.url || stream.thumbnail;
 
   const embed = new EmbedBuilder()
     .setColor('#00ff00')
     .setTitle('🔴 BURAK YAYINDA!')
     .setDescription(stream.title || 'Yayın başladı! Hemen katılın')
     .setURL(streamUrl)
-    .setImage(stream.thumbnail?.url || stream.thumbnail)
     .addFields(
-      { name: 'Kanal', value: `[@${channel.user.username}](${streamUrl})`, inline: true },
+      { name: 'Kanal', value: `[@${channel.user?.username || CONFIG.KICK_USERNAME}](${streamUrl})`, inline: true },
       { name: 'İzleyici', value: `${stream.viewers || 0} kişi`, inline: true },
       { name: 'Kategori', value: stream.category?.name || 'Bilinmiyor', inline: true },
       { name: 'Yayını İzle', value: `[Kick'te Aç](${streamUrl})`, inline: false }
     )
     .setTimestamp();
 
+  if (thumbnailUrl) {
+    embed.setImage(thumbnailUrl);
+  }
+
   try {
-    // Webhook ile gönder
-    if (CONFIG.DISCORD_WEBHOOK_URL) {
-      const webhook = new WebhookClient({
-        url: CONFIG.DISCORD_WEBHOOK_URL,
-      });
-      await webhook.send({
-        content: '@everyone',
-        embeds: [embed],
-      });
-      console.log(`✅ Duyuru gönderildi (Webhook)`);
-    }
+    const webhook = new WebhookClient({ url: CONFIG.DISCORD_WEBHOOK_URL });
+    await webhook.send({
+      content: '@everyone',
+      embeds: [embed],
+    });
+    console.log('✅ Duyuru gönderildi (Webhook)');
+    return true;
   } catch (error) {
     console.error('❌ Discord mesaj gönderme hatası:', error.message);
+    return false;
   }
 }
 
