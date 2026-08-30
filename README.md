@@ -49,6 +49,18 @@ Dosyaları Windows bilgisayarında çalıştırmak için:
 
 `baslat.bat` botu ve Kick/YouTube monitörlerini ayrı pencerelerde açar. Açılan pencereleri kapatmadığınız sürece süreçler çalışmaya devam eder.
 
+## Monitör Durumu ve Tekrar Koruması
+
+Bot, Kick yayın oturumunu ve YouTube'daki son videoyu proje klasöründeki `.data/monitor-state.json` dosyasında saklar. Bu dosya GitHub'a gönderilmez.
+
+Discord'da `/durum` komutunu kullanarak:
+- Kick'in canlı/çevrimdışı durumunu,
+- YouTube'da görülen son videoyu,
+- Monitörlerin son kontrol zamanını,
+- Varsa son hatayı görebilirsiniz.
+
+Bot yeniden başlatıldığında aynı Kick yayını veya YouTube videosu için tekrar bildirim gönderilmez.
+
 ## Komutlar
 
 ### /duyuru
