@@ -11,7 +11,7 @@
     "kick-monitor:dev": "nodemon kick-monitor.js",
     "youtube-monitor": "node youtube-monitor.js",
     "youtube-monitor:dev": "nodemon youtube-monitor.js",
-    "all-monitors": "npm run kick-monitor & npm run youtube-monitor"
+    "all-monitors": "node run-monitors.js"
   },
   "keywords": [
     "discord",
