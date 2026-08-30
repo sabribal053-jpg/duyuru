@@ -63,7 +63,22 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-// Kick Duyuru Kanalı Oluştur
+function setEnvValue(content, key, value) {
+  const lines = content.split(/\r?\n/);
+  const prefix = key + '=';
+  const index = lines.findIndex((line) => line.trimStart().startsWith(prefix));
+  const newLine = prefix + value;
+
+  if (index === -1) {
+    const base = content.replace(/\s*$/, '');
+    return base ? base + '\n' + newLine + '\n' : newLine + '\n';
+  }
+
+  lines[index] = newLine;
+  return lines.join('\n');
+}
+
+// Kick Duyuru Kanalı Oluştur veya mevcut kanalı bul
 async function setupKickAnnouncementChannel() {
   try {
     const configuredGuildId = process.env.DISCORD_GUILD_ID?.trim();
@@ -79,9 +94,25 @@ async function setupKickAnnouncementChannel() {
     }
 
     const channelName = 'kick-duyuru';
-    let channel = guild.channels.cache.find(
-      (ch) => ch.name === channelName && ch.type === ChannelType.GuildText
-    );
+    const channelTypes = [ChannelType.GuildText, ChannelType.GuildAnnouncement];
+    const savedChannelId = process.env.DISCORD_KICK_CHANNEL_ID?.trim();
+    let channel = null;
+
+    // Önce .env içindeki ID ile bul; isim değişse bile aynı kanal korunur.
+    if (savedChannelId) {
+      channel = await guild.channels.fetch(savedChannelId).catch(() => null);
+      if (channel && !channelTypes.includes(channel.type)) {
+        channel = null;
+      }
+    }
+
+    // ID yoksa veya kanal silindiyse Discord'dan güncel kanal listesini çek.
+    if (!channel) {
+      const channels = await guild.channels.fetch();
+      channel = channels.find(
+        (item) => item.name === channelName && channelTypes.includes(item.type)
+      );
+    }
 
     if (!channel) {
       console.log(`📝 "${channelName}" kanalı oluşturuluyor...`);
@@ -92,6 +123,8 @@ async function setupKickAnnouncementChannel() {
         reason: 'Kick Duyuru Botu Kurulumu',
       });
       console.log(`✅ "${channelName}" kanalı başarıyla oluşturuldu!`);
+    } else {
+      console.log(`✅ Mevcut #${channel.name} kanalı kullanılıyor.`);
     }
 
     // Webhook oluştur veya mevcut webhook'u bul
@@ -107,18 +140,16 @@ async function setupKickAnnouncementChannel() {
       console.log('✅ Webhook başarıyla oluşturuldu!');
     }
 
-    // .env dosyasını güvenli şekilde güncelle
-    const webhookLine = 'DISCORD_WEBHOOK_URL=' + webhook.url;
+    // Kanal ID'sini ve webhook'u yerelde hatırla; sonraki açılışta tekrar kanal oluşturulmaz.
     const envPath = path.join(__dirname, '.env');
     let envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
-
-    if (/^DISCORD_WEBHOOK_URL\s*=.*$/m.test(envContent)) {
-      envContent = envContent.replace(/^DISCORD_WEBHOOK_URL\s*=.*$/m, () => webhookLine);
-    } else {
-      envContent = envContent.replace(/\s*$/, '') + '\n' + webhookLine + '\n';
-    }
-
+    envContent = setEnvValue(envContent, 'DISCORD_KICK_CHANNEL_ID', channel.id);
+    envContent = setEnvValue(envContent, 'DISCORD_WEBHOOK_URL', webhook.url);
     fs.writeFileSync(envPath, envContent, 'utf8');
+
+    process.env.DISCORD_KICK_CHANNEL_ID = channel.id;
+    process.env.DISCORD_WEBHOOK_URL = webhook.url;
+
     console.log('✅ .env dosyası güncellendi!');
     console.log('\n🎯 Kick Duyuru Sistemi hazır!');
     console.log(`   Kanal: #${channel.name}`);
