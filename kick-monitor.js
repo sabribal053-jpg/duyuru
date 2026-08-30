@@ -2,6 +2,7 @@ require('dotenv').config();
 const axios = require('axios');
 const { EmbedBuilder, WebhookClient } = require('discord.js');
 const { loadState, updateState } = require('./monitor-state');
+const { logEvent } = require('./bot-logger');
 
 // Konfigürasyon
 const CONFIG = {
@@ -59,6 +60,10 @@ async function checkKickStream() {
           lastCheckAt: checkedAt,
           lastNotificationAt: checkedAt,
           lastError: null,
+        });
+        await logEvent('kick', 'Kick yayını duyuruldu.', {
+          Kanal: CONFIG.KICK_USERNAME,
+          İzleyici: stream.viewers || 0,
         });
       } else {
         updateState('kick', {
