@@ -49,7 +49,7 @@ Dosyaları Windows bilgisayarında çalıştırmak için:
 
 `baslat.bat` botu ve Kick/YouTube monitörlerini ayrı pencerelerde açar. Açılan pencereleri kapatmadığınız sürece süreçler çalışmaya devam eder.
 
-## Monitör Durumu ve Tekrar Koruması
+## Log ve İstatistikler\n\nBot ilk başarılı açılışında `bot-log` kanalını ve log webhook'unu oluşturur. Bu kanal; bot başlangıcını, manuel duyuruları, Kick/YouTube bildirimlerini ve komut hatalarını kaydeder. Kanal daha sonraki açılışlarda tekrar oluşturulmaz.\n\nYöneticiler Discord’da `\/istatistik` komutuyla toplam duyuru sayılarını ve son olayları görebilir. Yeni komutun görünmesi için güncelleme sonrası bir kez `npm run deploy-commands` çalıştırın.\n\n## Monitör Durumu ve Tekrar Koruması
 
 Bot, Kick yayın oturumunu ve YouTube'daki son videoyu proje klasöründeki `.data/monitor-state.json` dosyasında saklar. Bu dosya GitHub'a gönderilmez.
 
