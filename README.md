@@ -38,6 +38,17 @@ npm run deploy-commands
 npm start
 ```
 
+## Windows'ta Tek Tıkla Çalıştırma
+
+Dosyaları Windows bilgisayarında çalıştırmak için:
+
+1. İlk kurulumda **kurulum.bat** dosyasını çalıştırın.
+2. Oluşan **.env** dosyasına Discord token, uygulama ID'si ve sunucu ID'sini yazın.
+3. Bir kez `npm run deploy-commands` komutunu çalıştırın.
+4. Botu ve monitörleri başlatmak için **baslat.bat** dosyasını açın.
+
+`baslat.bat` botu ve Kick/YouTube monitörlerini ayrı pencerelerde açar. Açılan pencereleri kapatmadığınız sürece süreçler çalışmaya devam eder.
+
 ## Komutlar
 
 ### /duyuru
@@ -65,7 +76,7 @@ npm install
 ```
 
 2. **Discord bot'unu sunucuya ekle:**
-   - Bot token'ını `.env` dosyasına ekle
+   - Bot token'ını .env dosyasına ekle
    - Bot'a `Administrator` yetkisi ver
 
 3. **Botu başlat (kanal ve webhook otomatik oluşturulacak):**
@@ -103,10 +114,15 @@ Kullanıcıyla iletişime geçerek aşağıdaki özellikleri ekleyebiliriz:
 **Bot çevrimiçi değil:**
 - Token doğru mu kontrol edin
 - Bot token'ının geçerli olduğundan emin olun
+- Token'ı yenilediyseniz proje klasöründeki `.env` dosyasını güncelleyin
 
 **Komutlar görünmüyor:**
 - `npm run deploy-commands` komutunu çalıştırdığınızdan emin olun
 - `DISCORD_GUILD_ID` doğru sunucu ID'si mi kontrol edin
+
+**Monitörler başlamıyor:**
+- Önce `npm start` ile botun `#kick-duyuru` kanalını ve webhook'u oluşturduğunu kontrol edin
+- Botun kanal oluşturma ve webhook yönetme yetkisi olduğundan emin olun
 
 ## Lisans
 ISC
