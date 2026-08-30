@@ -2,6 +2,7 @@ require('dotenv').config();
 const axios = require('axios');
 const { parseStringPromise } = require('xml2js');
 const { WebhookClient, EmbedBuilder } = require('discord.js');
+const { loadState, updateState } = require('./monitor-state');
 
 // Konfigürasyon
 const CONFIG = {
@@ -11,10 +12,23 @@ const CONFIG = {
   DISCORD_WEBHOOK_URL: process.env.DISCORD_WEBHOOK_URL,
 };
 
-// Durum takibi
-let lastVideoIds = [];
+// Webhook URL kontrolü
+if (!CONFIG.DISCORD_WEBHOOK_URL) {
+  console.error('❌ DISCORD_WEBHOOK_URL .env dosyasında bulunamadı!');
+  console.log('💡 Lütfen bot.js ile önce botu çalıştırın:');
+  console.log('   npm start');
+  process.exit(1);
+}
+
+// Son video diskte tutulur; bot yeniden başlasa bile aynı video tekrar duyurulmaz.
+let lastVideoId = loadState().youtube.latestVideoId || null;
+let isChecking = false;
 
 async function checkYouTubeChannel() {
+  if (isChecking) return;
+  isChecking = true;
+  const checkedAt = new Date().toISOString();
+
   try {
     const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${CONFIG.YOUTUBE_CHANNEL_ID}`;
     const response = await axios.get(feedUrl, {
@@ -26,6 +40,10 @@ async function checkYouTubeChannel() {
     const result = await parseStringPromise(response.data);
 
     if (!result.feed || !result.feed.entry) {
+      updateState('youtube', {
+        lastCheckAt: checkedAt,
+        lastError: 'YouTube feed boş döndü',
+      });
       console.log('⚠️ YouTube feed boş. Sonra tekrar deneyeceğiz...');
       return;
     }
@@ -38,12 +56,29 @@ async function checkYouTubeChannel() {
     const channelName = latestVideo.author?.[0]?.name?.[0];
 
     if (!videoId || !title) {
+      updateState('youtube', {
+        lastCheckAt: checkedAt,
+        lastError: 'YouTube video bilgileri eksik',
+      });
       console.log('⚠️ Video bilgileri eksik');
       return;
     }
 
-    // Yeni video mu kontrol et
-    if (!lastVideoIds.includes(videoId)) {
+    // İlk kontrolde mevcut videoyu referans olarak kaydet, bildirim gönderme.
+    if (!lastVideoId) {
+      lastVideoId = videoId;
+      updateState('youtube', {
+        latestVideoId: videoId,
+        latestVideoTitle: title,
+        latestPublishedAt: published,
+        lastCheckAt: checkedAt,
+        lastError: null,
+      });
+      console.log(`ℹ️ YouTube başlangıç videosu kaydedildi: ${title}`);
+      return;
+    }
+
+    if (videoId !== lastVideoId) {
       console.log(`✅ Yeni video bulundu: ${title}`);
       const sent = await sendYouTubeNotification({
         videoId,
@@ -53,15 +88,37 @@ async function checkYouTubeChannel() {
       });
 
       if (sent) {
-        lastVideoIds.unshift(videoId);
-        // Son 5 video ID'sini tut
-        if (lastVideoIds.length > 5) {
-          lastVideoIds.pop();
-        }
+        lastVideoId = videoId;
+        updateState('youtube', {
+          latestVideoId: videoId,
+          latestVideoTitle: title,
+          latestPublishedAt: published,
+          lastCheckAt: checkedAt,
+          lastNotificationAt: checkedAt,
+          lastError: null,
+        });
+      } else {
+        updateState('youtube', {
+          lastCheckAt: checkedAt,
+          lastError: 'Discord YouTube bildirimi gönderilemedi',
+        });
       }
+    } else {
+      updateState('youtube', {
+        latestVideoTitle: title,
+        latestPublishedAt: published,
+        lastCheckAt: checkedAt,
+        lastError: null,
+      });
     }
   } catch (error) {
+    updateState('youtube', {
+      lastCheckAt: checkedAt,
+      lastError: error.message,
+    });
     console.error('❌ YouTube kontrol hatası:', error.message);
+  } finally {
+    isChecking = false;
   }
 }
 
@@ -85,6 +142,10 @@ async function sendYouTubeNotification(video) {
     )
     .setImage(`https://img.youtube.com/vi/${video.videoId}/maxresdefault.jpg`)
     .setTimestamp();
+
+  if (video.channelName) {
+    embed.setAuthor({ name: video.channelName });
+  }
 
   try {
     const webhook = new WebhookClient({ url: CONFIG.DISCORD_WEBHOOK_URL });
