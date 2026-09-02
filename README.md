@@ -138,3 +138,15 @@ Kullanıcıyla iletişime geçerek aşağıdaki özellikleri ekleyebiliriz:
 
 ## Lisans
 ISC
+
+## v2.0.0 — Embed Tasarımı ve Yönetici Ayarları
+
+v2 ile duyurular sunucuya özel görünüm ayarlarını kullanır:
+
+- /duyuru komutunda isteğe bağlı resim parametresiyle embed görseli ekleyin.
+- /ayarlar goster ile mevcut ayarları görüntüleyin.
+- /ayarlar renk hex:#5865f2 ile embed rengini değiştirin.
+- /ayarlar footer metin:Topluluk Duyuruları ile footer metnini değiştirin. Footer'ı kapatmak için yok yazın.
+- /ayarlar mention hedef:@everyone ile duyurularda @everyone, @here veya mention olmamasını seçin.
+
+Ayarlar sunucu bazında .data/bot-settings.json dosyasına kaydedilir ve .data/ GitHub'a gönderilmez. Yeni /ayarlar komutunu Discord'a tanıtmak için güncelleme sonrası bir kez npm run deploy-commands çalıştırın.
