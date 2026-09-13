@@ -238,26 +238,38 @@ async function findOrCreateWebhook(channel, webhookName, reason) {
 
 // Monitör kanallarını oluştur veya mevcut kanalları bul
 async function setupMonitorAnnouncementChannel(guild, parentCategory, options) {
-  try {
-    const channel = await findOrCreateTextChannel(
-      guild,
-      options.channelName,
-      options.topic,
-      process.env[options.channelEnv]?.trim(),
-      parentCategory
-    );
-    const webhook = await findOrCreateWebhook(channel, options.webhookName, options.reason);
-    const envValues = {
-      [options.channelEnv]: channel.id,
-      [options.webhookEnv]: webhook.url,
-    };
-    if (options.legacyWebhookEnv) envValues[options.legacyWebhookEnv] = webhook.url;
-    saveEnvValues(envValues);
-    console.log('✅ #' + options.channelName + ' ayarları hazır!');
-  } catch (error) {
-    console.error('❌ #' + options.channelName + ' kanalı oluşturma hatası:', error.message);
-    await logEvent('error', options.channelName + ' kanalı hazırlanamadı.', { Hata: error.message });
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const channel = await findOrCreateTextChannel(
+        guild,
+        options.channelName,
+        options.topic,
+        process.env[options.channelEnv]?.trim(),
+        parentCategory
+      );
+      const webhook = await findOrCreateWebhook(channel, options.webhookName, options.reason);
+      const envValues = {
+        [options.channelEnv]: channel.id,
+        [options.webhookEnv]: webhook.url,
+      };
+      if (options.legacyWebhookEnv) envValues[options.legacyWebhookEnv] = webhook.url;
+      saveEnvValues(envValues);
+      console.log('✅ #' + options.channelName + ' ayarları hazır!');
+      return true;
+    } catch (error) {
+      lastError = error;
+      console.error('⚠️ #' + options.channelName + ' kurulum denemesi ' + attempt + '/3 başarısız:', error.message);
+      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 5000));
+    }
   }
+
+  console.error('❌ #' + options.channelName + ' kanalı oluşturma hatası:', lastError?.message || 'Bilinmeyen hata');
+  await logEvent('error', options.channelName + ' kanalı hazırlanamadı.', {
+    Hata: lastError?.message || 'Bilinmeyen hata',
+  });
+  return false;
 }
 
 async function setupMonitorAnnouncementChannels(guild) {
