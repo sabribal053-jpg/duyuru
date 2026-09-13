@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, Collection, ChannelType } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, ChannelType, ActivityType } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 const { logEvent } = require('./bot-logger');
@@ -54,6 +54,13 @@ for (const file of commandFiles) {
 
 client.once('ready', async () => {
   try {
+    const statusText = (process.env.DISCORD_STATUS_TEXT || 'Duyuruları takip ediyor').trim().slice(0, 128);
+    client.user.setPresence({
+      status: 'dnd',
+      activities: [{ name: statusText || 'Duyuruları takip ediyor', type: ActivityType.Watching }],
+    });
+    console.log('🔕 Discord durumu: Rahatsız Etmeyin - ' + (statusText || 'Duyuruları takip ediyor'));
+
     console.log(`✅ Bot başlatıldı: ${client.user.tag}`);
     console.log(`📝 ${client.commands.size} komut yüklendi`);
 
