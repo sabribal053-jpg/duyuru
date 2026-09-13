@@ -50,6 +50,7 @@ function createDefaultState() {
       lastAnnouncementAt: null,
     },
     events: [],
+    notificationClaims: {},
   };
 }
 
@@ -68,6 +69,7 @@ function loadState() {
       tiktok: { ...defaultState.tiktok, ...(savedState.tiktok || {}) },
       stats: { ...defaultState.stats, ...(savedState.stats || {}) },
       events: Array.isArray(savedState.events) ? savedState.events.slice(0, 100) : [],
+      notificationClaims: savedState.notificationClaims && typeof savedState.notificationClaims === 'object' && !Array.isArray(savedState.notificationClaims) ? savedState.notificationClaims : {},
     };
   } catch (error) {
     console.warn('⚠️ Monitör hafızası okunamadı, varsayılan durum kullanılacak:', error.message);
@@ -199,4 +201,48 @@ function recordEvent(type, message, metadata = {}) {
   }
 }
 
-module.exports = { loadState, saveState, updateState, recordEvent };
+const notificationClaimTtlMs = 7 * 24 * 60 * 60 * 1000;
+const maxNotificationClaims = 500;
+
+function claimNotification(key) {
+  if (!key) return false;
+  try {
+    return withStateLock(() => {
+      const state = loadState();
+      const claims = { ...(state.notificationClaims || {}) };
+      const now = Date.now();
+
+      for (const [claimKey, claimedAt] of Object.entries(claims)) {
+        if (!Number.isFinite(claimedAt) || now - claimedAt > notificationClaimTtlMs) delete claims[claimKey];
+      }
+
+      if (claims[key]) return false;
+      claims[key] = now;
+      const sortedClaims = Object.entries(claims)
+        .sort((left, right) => left[1] - right[1])
+        .slice(-maxNotificationClaims);
+      state.notificationClaims = Object.fromEntries(sortedClaims);
+      writeState(state);
+      return true;
+    });
+  } catch (error) {
+    console.error('❌ Bildirim tekrarı kontrol edilemedi:', error.message);
+    return false;
+  }
+}
+
+function releaseNotification(key) {
+  if (!key) return;
+  try {
+    withStateLock(() => {
+      const state = loadState();
+      if (!state.notificationClaims || !state.notificationClaims[key]) return;
+      delete state.notificationClaims[key];
+      writeState(state);
+    });
+  } catch (error) {
+    console.error('❌ Başarısız bildirim rezervasyonu bırakılamadı:', error.message);
+  }
+}
+
+module.exports = { loadState, saveState, updateState, recordEvent, claimNotification, releaseNotification };

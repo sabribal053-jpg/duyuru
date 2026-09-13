@@ -1,7 +1,7 @@
 require('dotenv').config();
 const axios = require('axios');
 const { EmbedBuilder, WebhookClient } = require('discord.js');
-const { loadState, updateState } = require('./monitor-state');
+const { loadState, updateState, claimNotification, releaseNotification } = require('./monitor-state');
 const { logEvent } = require('./bot-logger');
 
 // Konfigürasyon
@@ -53,7 +53,17 @@ async function checkKickStream() {
     const isNewStream = isLive && (!lastStreamStatus || (streamId && streamId !== lastStreamId));
 
     if (isNewStream) {
+      const notificationKey = 'kick:' + CONFIG.KICK_USERNAME + ':' + (streamId || stream?.started_at || stream?.created_at || stream?.title || 'live');
+      if (!claimNotification(notificationKey)) {
+        lastStreamStatus = true;
+        lastStreamId = streamId || lastStreamId;
+        updateState('kick', { isLive: true, streamId: lastStreamId, lastCheckAt: checkedAt, lastError: null });
+        console.log('ℹ️ Aynı Kick bildirimi daha önce işlendi; tekrar gönderilmedi.');
+        return;
+      }
+
       const sent = await sendDiscordNotification(channel);
+      if (!sent) releaseNotification(notificationKey);
 
       if (sent) {
         lastStreamStatus = true;

@@ -1,7 +1,7 @@
 require('dotenv').config();
 const axios = require('axios');
 const { WebhookClient, EmbedBuilder } = require('discord.js');
-const { loadState, updateState } = require('./monitor-state');
+const { loadState, updateState, claimNotification, releaseNotification } = require('./monitor-state');
 const { logEvent } = require('./bot-logger');
 
 const CONFIG = {
@@ -226,7 +226,15 @@ async function syncLiveState(live, checkedAt) {
 
   const newLiveSession = !previous.isLive || (live.roomId && live.roomId !== previous.liveRoomId);
   if (newLiveSession) {
+    const notificationKey = 'tiktok:live:' + (live.roomId || live.startedAt || live.title || CONFIG.USERNAME);
+    if (!claimNotification(notificationKey)) {
+      updateState('tiktok', { isLive: true, liveRoomId: live.roomId, liveTitle: live.title, liveViewers: live.viewers, liveStartedAt: live.startedAt, lastLiveCheckAt: checkedAt });
+      console.log('ℹ️ Aynı TikTok canlı yayın bildirimi daha önce işlendi; tekrar gönderilmedi.');
+      return;
+    }
+
     const sent = await sendTikTokLiveNotification(live);
+    if (!sent) releaseNotification(notificationKey);
     updateState('tiktok', {
       isLive: true,
       liveRoomId: live.roomId,
@@ -264,7 +272,16 @@ async function checkTikTokProfile() {
       return;
     }
     if (latestVideo.id !== lastVideoId) {
+      const notificationKey = 'tiktok:video:' + latestVideo.id;
+      if (!claimNotification(notificationKey)) {
+        lastVideoId = latestVideo.id;
+        updateState('tiktok', { latestVideoId: latestVideo.id, latestVideoTitle: latestVideo.title, latestPublishedAt: latestVideo.publishedAt, lastCheckAt: checkedAt, lastError: null });
+        console.log('ℹ️ Aynı TikTok video bildirimi daha önce işlendi; tekrar gönderilmedi.');
+        return;
+      }
+
       const sent = await sendTikTokVideoNotification(latestVideo);
+      if (!sent) releaseNotification(notificationKey);
       if (sent) {
         lastVideoId = latestVideo.id;
         updateState('tiktok', { latestVideoId: latestVideo.id, latestVideoTitle: latestVideo.title, latestPublishedAt: latestVideo.publishedAt, lastCheckAt: checkedAt, lastNotificationAt: checkedAt, lastError: null });

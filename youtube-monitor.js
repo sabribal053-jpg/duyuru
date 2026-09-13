@@ -2,7 +2,7 @@ require('dotenv').config();
 const axios = require('axios');
 const { parseStringPromise } = require('xml2js');
 const { WebhookClient, EmbedBuilder } = require('discord.js');
-const { loadState, updateState } = require('./monitor-state');
+const { loadState, updateState, claimNotification, releaseNotification } = require('./monitor-state');
 const { logEvent } = require('./bot-logger');
 
 // Konfigürasyon
@@ -82,12 +82,21 @@ async function checkYouTubeChannel() {
 
     if (videoId !== lastVideoId) {
       console.log(`✅ Yeni video bulundu: ${title}`);
+      const notificationKey = 'youtube:' + videoId;
+      if (!claimNotification(notificationKey)) {
+        lastVideoId = videoId;
+        updateState('youtube', { latestVideoId: videoId, latestVideoTitle: title, latestPublishedAt: published, lastCheckAt: checkedAt, lastError: null });
+        console.log('ℹ️ Aynı YouTube bildirimi daha önce işlendi; tekrar gönderilmedi.');
+        return;
+      }
+
       const sent = await sendYouTubeNotification({
         videoId,
         title,
         published,
         channelName,
       });
+      if (!sent) releaseNotification(notificationKey);
 
       if (sent) {
         lastVideoId = videoId;
