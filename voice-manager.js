@@ -13,6 +13,7 @@ const { logEvent } = require('./bot-logger');
 
 const voiceChannelTypes = [ChannelType.GuildVoice, ChannelType.GuildStageVoice];
 const reconnectTimers = new Map();
+const reconnectAttempts = new Map();
 const intentionalDisconnects = new WeakSet();
 const recoveringConnections = new WeakSet();
 
@@ -36,14 +37,25 @@ function reportVoiceError(message, error) {
   });
 }
 
+function markVoiceReady(guildId) {
+  clearReconnectTimer(guildId);
+  reconnectAttempts.delete(guildId);
+  updateState('voice', { lastConnectedAt: new Date().toISOString(), lastError: null });
+}
+
 function scheduleReconnect(guild) {
   const state = loadState().voice;
   if (!state?.enabled || state.guildId !== guild.id || !state.channelId || reconnectTimers.has(guild.id)) return;
 
+  const attempt = (reconnectAttempts.get(guild.id) || 0) + 1;
+  reconnectAttempts.set(guild.id, attempt);
+  const delay = Math.min(60000, 10000 * Math.pow(2, Math.min(attempt - 1, 2)));
+  console.log('🔁 Discord ses yeniden bağlanma denemesi ' + attempt + ' ' + Math.round(delay / 1000) + ' saniye sonra yapılacak.');
+
   const timer = setTimeout(async () => {
     reconnectTimers.delete(guild.id);
     await reconnectConfiguredVoice(guild);
-  }, 10000);
+  }, delay);
   reconnectTimers.set(guild.id, timer);
 }
 
@@ -52,17 +64,27 @@ async function recoverDisconnectedConnection(connection, guild) {
   recoveringConnections.add(connection);
 
   try {
-    // Discord bazen kısa süreli kopmalarda aynı bağlantıyı kendisi toparlar.
+    const joinConfig = connection.joinConfig || {};
+    const rejoined = typeof connection.rejoin === 'function'
+      ? connection.rejoin({
+        channelId: joinConfig.channelId,
+        selfDeaf: true,
+        selfMute: true,
+      })
+      : false;
+
+    if (!rejoined) throw new Error('Mevcut Discord ses bağlantısı yeniden başlatılamadı');
+
     await Promise.race([
       entersState(connection, VoiceConnectionStatus.Signalling, 5000),
       entersState(connection, VoiceConnectionStatus.Connecting, 5000),
     ]);
     await entersState(connection, VoiceConnectionStatus.Ready, 15000);
-    updateState('voice', { lastConnectedAt: new Date().toISOString(), lastError: null });
-    console.log('✅ Discord ses bağlantısı otomatik olarak toparlandı.');
+    markVoiceReady(guild.id);
+    console.log('✅ Discord ses bağlantısı aynı bağlantı üzerinden toparlandı.');
   } catch (error) {
     if (!intentionalDisconnects.has(connection)) {
-      reportVoiceError('Discord ses bağlantısı koptu, yeniden bağlanılıyor', error);
+      reportVoiceError('Discord ses bağlantısı toparlanamadı, yeniden bağlanma planlandı', error);
       destroyConnection(connection);
       scheduleReconnect(guild);
     }
@@ -113,6 +135,7 @@ async function connectToVoiceChannel(guild, channelId) {
 
   try {
     await entersState(connection, VoiceConnectionStatus.Ready, 15000);
+    markVoiceReady(guild.id);
     updateState('voice', {
       enabled: true,
       guildId: guild.id,
@@ -142,6 +165,7 @@ async function configureVoiceChannel(guild, channel) {
 
 function disconnectVoice(guildId) {
   clearReconnectTimer(guildId);
+  reconnectAttempts.delete(guildId);
   const connection = getVoiceConnection(guildId);
   if (connection) destroyConnection(connection);
   updateState('voice', { enabled: false, lastError: null });
