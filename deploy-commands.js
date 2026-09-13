@@ -1,4 +1,17 @@
 require('dotenv').config();
+
+const requiredEnvironment = ['DISCORD_TOKEN', 'DISCORD_CLIENT_ID', 'DISCORD_GUILD_ID'];
+const missingEnvironment = requiredEnvironment.filter((name) => {
+  const value = process.env[name]?.trim();
+  return !value || value === 'your_token_here' || value === 'your_client_id_here' || value === 'your_guild_id_here';
+});
+
+if (missingEnvironment.length > 0) {
+  console.error('❌ Eksik Discord ayarları: ' + missingEnvironment.join(', '));
+  console.error('Komutları deploy etmeden önce .env dosyasını doldurun.');
+  process.exit(1);
+}
+
 const { REST, Routes } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
