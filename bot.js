@@ -5,9 +5,15 @@ const path = require('path');
 const { logEvent } = require('./bot-logger');
 
 const token = process.env.DISCORD_TOKEN?.trim();
+const guildId = process.env.DISCORD_GUILD_ID?.trim();
+const missingEnvironment = [];
 
-if (!token || token === 'your_token_here') {
-  console.error('❌ DISCORD_TOKEN bulunamadı. Proje klasöründeki .env dosyasını kontrol edin.');
+if (!token || token === 'your_token_here') missingEnvironment.push('DISCORD_TOKEN');
+if (!guildId || guildId === 'your_guild_id_here') missingEnvironment.push('DISCORD_GUILD_ID');
+
+if (missingEnvironment.length > 0) {
+  console.error('❌ Eksik Discord ayarları: ' + missingEnvironment.join(', '));
+  console.error('Proje klasöründeki .env dosyasını kontrol edin.');
   process.exit(1);
 }
 
@@ -38,10 +44,12 @@ client.once('ready', async () => {
   console.log(`📝 ${client.commands.size} komut yüklendi`);
 
   const guild = getTargetGuild();
+  if (!guild) return;
+
   await setupKickAnnouncementChannel(guild);
   await setupBotLogChannel(guild);
   await logEvent('startup', 'Bot Discord’a başarıyla bağlandı.', {
-    Sunucu: guild?.name || 'Bilinmiyor',
+    Sunucu: guild.name,
   });
 });
 
@@ -74,11 +82,10 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 function getTargetGuild() {
-  const configuredGuildId = process.env.DISCORD_GUILD_ID?.trim();
-  const guild = (configuredGuildId && client.guilds.cache.get(configuredGuildId)) || client.guilds.cache.first();
+  const guild = client.guilds.cache.get(guildId);
 
-  if (configuredGuildId && guild && guild.id !== configuredGuildId) {
-    console.warn('⚠️ DISCORD_GUILD_ID botun bulunduğu sunucular arasında bulunamadı; ilk sunucu kullanılacak.');
+  if (!guild) {
+    console.error('❌ DISCORD_GUILD_ID botun bulunduğu sunucular arasında bulunamadı.');
   }
 
   return guild;
