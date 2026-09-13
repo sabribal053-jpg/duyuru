@@ -110,8 +110,7 @@ function writeState(state) {
   const tempPath = statePath + '.' + process.pid + '.tmp';
 
   try {
-    fs.writeFileSync(tempPath, JSON.stringify(state, null, 2) + '
-', 'utf8');
+    fs.writeFileSync(tempPath, JSON.stringify(state, null, 2) + '\n', 'utf8');
     try {
       fs.renameSync(tempPath, statePath);
     } catch (error) {
