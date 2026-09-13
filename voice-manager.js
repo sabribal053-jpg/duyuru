@@ -16,6 +16,7 @@ const reconnectTimers = new Map();
 const reconnectAttempts = new Map();
 const intentionalDisconnects = new WeakSet();
 const recoveringConnections = new WeakSet();
+const initializingConnections = new WeakSet();
 
 function clearReconnectTimer(guildId) {
   const timer = reconnectTimers.get(guildId);
@@ -60,7 +61,7 @@ function scheduleReconnect(guild) {
 }
 
 async function recoverDisconnectedConnection(connection, guild) {
-  if (intentionalDisconnects.has(connection) || recoveringConnections.has(connection)) return;
+  if (intentionalDisconnects.has(connection) || initializingConnections.has(connection) || recoveringConnections.has(connection)) return;
   recoveringConnections.add(connection);
 
   try {
@@ -131,6 +132,7 @@ async function connectToVoiceChannel(guild, channelId) {
     selfDeaf: true,
     selfMute: true,
   });
+  initializingConnections.add(connection);
   bindConnection(connection, guild);
 
   try {
@@ -144,8 +146,10 @@ async function connectToVoiceChannel(guild, channelId) {
       lastConnectedAt: new Date().toISOString(),
       lastError: null,
     });
+    initializingConnections.delete(connection);
     return channel;
   } catch (error) {
+    initializingConnections.delete(connection);
     destroyConnection(connection);
     updateState('voice', { lastError: error.message });
     throw error;
