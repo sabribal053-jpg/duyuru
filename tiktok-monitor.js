@@ -188,24 +188,71 @@ function extractLiveState(documents) {
   return liveCandidate;
 }
 
+async function fetchTikTokApiSnapshot() {
+  const headers = {
+    Accept: 'application/json, text/plain, */*',
+    Referer: 'https://www.tiktok.com/@' + CONFIG.USERNAME,
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
+  };
+  const userResponse = await axios.get('https://www.tiktok.com/api/user/detail/', {
+    params: { unique_id: CONFIG.USERNAME },
+    timeout: 20000,
+    headers,
+  });
+  const user = userResponse.data?.userInfo?.user || userResponse.data?.user || {};
+  const secUid = user.secUid || user.sec_uid;
+  if (!secUid) throw new Error('TikTok public kullanıcı verisinde secUid bulunamadı');
+
+  const postsResponse = await axios.get('https://www.tiktok.com/api/post/item_list/', {
+    params: {
+      aid: '1988',
+      app_language: 'en',
+      app_name: 'tiktok_web',
+      browser_language: 'en-US',
+      browser_name: 'Mozilla',
+      browser_version: '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
+      channel: 'tiktok_web',
+      cookie_enabled: 'true',
+      count: '12',
+      cursor: '0',
+      device_platform: 'web_pc',
+      from_page: 'user',
+      region: 'US',
+      secUid,
+    },
+    timeout: 20000,
+    headers,
+  });
+  const data = postsResponse.data || {};
+  return {
+    video: extractLatestVideo([data], JSON.stringify(data)),
+    live: extractLiveState([data]),
+  };
+}
+
 async function fetchProfileSnapshot() {
   const profileUrl = 'https://www.tiktok.com/@' + encodeURIComponent(CONFIG.USERNAME);
-  const response = await axios.get(profileUrl, {
-    timeout: 20000,
-    headers: {
-      Accept: 'text/html,application/xhtml+xml',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
-    },
-  });
-  const finalUrl = response.request?.res?.responseUrl || response.request?._redirectable?._currentUrl || response.request?.responseURL || '';
-  if (/\/in\/about(?:[/?#]|$)/i.test(finalUrl)) {
-    throw new Error('TikTok profili bu sunucudan /in/about sayfasına yönlendirildi; public profil verisi erişimi engellendi');
+  try {
+    const response = await axios.get(profileUrl, {
+      timeout: 20000,
+      headers: {
+        Accept: 'text/html,application/xhtml+xml',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
+      },
+    });
+    const finalUrl = response.request?.res?.responseUrl || response.request?._redirectable?._currentUrl || response.request?.responseURL || '';
+    if (/\/in\/about(?:[/?#]|$)/i.test(finalUrl)) {
+      throw new Error('TikTok profili /in/about sayfasına yönlendirildi');
+    }
+    const documents = parseEmbeddedData(response.data);
+    return {
+      video: extractLatestVideo(documents, response.data),
+      live: extractLiveState(documents),
+    };
+  } catch (profileError) {
+    console.warn('TikTok web profili okunamadı, public API fallback deneniyor:', profileError.message);
+    return fetchTikTokApiSnapshot();
   }
-  const documents = parseEmbeddedData(response.data);
-  return {
-    video: extractLatestVideo(documents, response.data),
-    live: extractLiveState(documents),
-  };
 }
 
 async function sendTikTokVideoNotification(video) {
@@ -220,7 +267,6 @@ async function sendTikTokVideoNotification(video) {
       { name: 'Videoyu İzle', value: "[TikTok'ta Aç](" + videoUrl + ")", inline: false }
     )
     .setFooter({ text: 'TikTok Webhook' })
-    .setFooter({ text: 'TikTok Live Webhook' })
     .setTimestamp();
   if (video.coverUrl) embed.setImage(video.coverUrl);
   if (video.author) embed.setAuthor({ name: video.author });
@@ -248,6 +294,7 @@ async function sendTikTokLiveNotification(live) {
       { name: 'İzleyici', value: String(live.viewers || 0), inline: true },
       { name: 'Yayını İzle', value: "[TikTok canlı yayınına git](" + liveUrl + ")", inline: false }
     )
+    .setFooter({ text: 'TikTok Live Webhook' })
     .setTimestamp();
   if (live.coverUrl) embed.setImage(live.coverUrl);
 
@@ -322,7 +369,11 @@ async function checkTikTokProfile() {
       const snapshot = await fetchProfileSnapshot();
       const state = loadState().tiktok;
       if (snapshot.live?.known && !state.lastLiveCheckAt) await syncLiveState(snapshot.live, checkedAt);
-      if (!snapshot.video) throw new Error('TikTok profilinden video bilgisi okunamadı');
+      if (!snapshot.video) {
+        updateState('tiktok', { lastCheckAt: checkedAt, lastError: null });
+        console.warn('⚠️ TikTok video verisi şu an erişilemiyor; sonraki kontrolde yeniden denenecek.');
+        return;
+      }
       const latestVideo = snapshot.video;
 
       if (!lastVideoId) {
