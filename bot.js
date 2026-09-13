@@ -52,6 +52,16 @@ for (const file of commandFiles) {
   client.commands.set(command.data.name, command);
 }
 
+async function registerSlashCommands(guild) {
+  try {
+    const commandData = [...client.commands.values()].map((command) => command.data.toJSON());
+    await guild.commands.set(commandData);
+    console.log('✅ Slash komutları otomatik kaydedildi: ' + commandData.map((command) => '/' + command.name).join(', '));
+  } catch (error) {
+    reportBackgroundError('Slash komutları kaydedilemedi', error);
+  }
+}
+
 client.once('ready', async () => {
   try {
     const statusText = (process.env.DISCORD_STATUS_TEXT || 'Duyuruları takip ediyor').trim().slice(0, 128);
@@ -67,6 +77,7 @@ client.once('ready', async () => {
     const guild = getTargetGuild();
     if (!guild) return;
 
+    await registerSlashCommands(guild);
     await setupMonitorAnnouncementChannels(guild);
     await setupBotLogChannel(guild);
     await reconnectConfiguredVoice(guild);
