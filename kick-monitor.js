@@ -23,13 +23,17 @@ if (!CONFIG.DISCORD_KICK_WEBHOOK_URL) {
 const savedKickState = loadState().kick;
 let lastStreamStatus = Boolean(savedKickState.isLive);
 let lastStreamId = savedKickState.streamId || null;
+let isChecking = false;
 
 async function checkKickStream() {
+  if (isChecking) return;
+  isChecking = true;
   const checkedAt = new Date().toISOString();
 
   try {
     const response = await axios.get(
-      `https://kick.com/api/v1/channels/${CONFIG.KICK_USERNAME}`
+      `https://kick.com/api/v1/channels/${CONFIG.KICK_USERNAME}`,
+      { timeout: 20000 }
     );
 
     // API direkt kanal objesini döndürüyor; yayın yoksa livestream null olur.
@@ -101,6 +105,8 @@ async function checkKickStream() {
       lastError: error.message,
     });
     console.error('❌ Kick kontrol hatası:', error.message);
+  } finally {
+    isChecking = false;
   }
 }
 

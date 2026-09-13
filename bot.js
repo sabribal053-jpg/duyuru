@@ -118,15 +118,40 @@ function saveEnvValues(values) {
   fs.writeFileSync(envPath, envContent, 'utf8');
 }
 
-async function findOrCreateTextChannel(guild, channelName, topic, savedChannelId) {
+async function findOrCreateAnnouncementCategory(guild) {
+  const categoryType = ChannelType.GuildCategory;
+  const configuredCategoryId = process.env.DISCORD_ANNOUNCEMENT_CATEGORY_ID?.trim();
+  let category = configuredCategoryId
+    ? await guild.channels.fetch(configuredCategoryId).catch(() => null)
+    : null;
+
+  if (!category || category.type !== categoryType) {
+    const channels = await guild.channels.fetch();
+    category = channels.find(
+      (item) => item.type === categoryType && item.name.toLowerCase() === 'duyuru'
+    );
+  }
+
+  if (!category) {
+    category = await guild.channels.create({
+      name: 'Duyuru',
+      type: categoryType,
+      reason: 'Duyuru kanalları kategorisi',
+    });
+    console.log('✅ Duyuru kategorisi oluşturuldu.');
+  }
+
+  saveEnvValues({ DISCORD_ANNOUNCEMENT_CATEGORY_ID: category.id });
+  return category;
+}
+
+async function findOrCreateTextChannel(guild, channelName, topic, savedChannelId, parentCategory) {
   const channelTypes = [ChannelType.GuildText, ChannelType.GuildAnnouncement];
   let channel = null;
 
   if (savedChannelId) {
     channel = await guild.channels.fetch(savedChannelId).catch(() => null);
-    if (channel && !channelTypes.includes(channel.type)) {
-      channel = null;
-    }
+    if (channel && !channelTypes.includes(channel.type)) channel = null;
   }
 
   if (!channel) {
@@ -137,16 +162,23 @@ async function findOrCreateTextChannel(guild, channelName, topic, savedChannelId
   }
 
   if (!channel) {
-    console.log(`📝 "${channelName}" kanalı oluşturuluyor...`);
+    console.log('📝 "' + channelName + '" kanalı oluşturuluyor...');
     channel = await guild.channels.create({
       name: channelName,
       type: ChannelType.GuildText,
       topic,
+      parent: parentCategory?.id,
       reason: 'Duyuru Botu Kurulumu',
     });
-    console.log(`✅ "${channelName}" kanalı başarıyla oluşturuldu!`);
+    console.log('✅ "' + channelName + '" kanalı başarıyla oluşturuldu!');
+  } else if (parentCategory && channel.parentId !== parentCategory.id) {
+    await channel.setParent(parentCategory.id, {
+      lockPermissions: false,
+      reason: 'Duyuru kanallarını Duyuru kategorisinde toplama',
+    });
+    console.log('✅ "' + channelName + '" kanalı Duyuru kategorisine taşındı.');
   } else {
-    console.log(`✅ Mevcut #${channel.name} kanalı kullanılıyor.`);
+    console.log('✅ Mevcut #' + channel.name + ' kanalı kullanılıyor.');
   }
 
   return channel;
@@ -169,13 +201,14 @@ async function findOrCreateWebhook(channel, webhookName, reason) {
 }
 
 // Monitör kanallarını oluştur veya mevcut kanalları bul
-async function setupMonitorAnnouncementChannel(guild, options) {
+async function setupMonitorAnnouncementChannel(guild, parentCategory, options) {
   try {
     const channel = await findOrCreateTextChannel(
       guild,
       options.channelName,
       options.topic,
-      process.env[options.channelEnv]?.trim()
+      process.env[options.channelEnv]?.trim(),
+      parentCategory
     );
     const webhook = await findOrCreateWebhook(channel, options.webhookName, options.reason);
     const envValues = {
@@ -192,31 +225,37 @@ async function setupMonitorAnnouncementChannel(guild, options) {
 }
 
 async function setupMonitorAnnouncementChannels(guild) {
-  await setupMonitorAnnouncementChannel(guild, {
-    channelName: 'kick-duyuru',
-    topic: '🎬 Kick yayın duyuruları',
-    channelEnv: 'DISCORD_KICK_CHANNEL_ID',
-    webhookEnv: 'DISCORD_KICK_WEBHOOK_URL',
-    legacyWebhookEnv: 'DISCORD_WEBHOOK_URL',
-    webhookName: 'Kick Monitor',
-    reason: 'Kick Duyuru Botu Webhook',
-  });
-  await setupMonitorAnnouncementChannel(guild, {
-    channelName: 'youtube-duyuru',
-    topic: '▶️ YouTube video duyuruları',
-    channelEnv: 'DISCORD_YOUTUBE_CHANNEL_ID',
-    webhookEnv: 'DISCORD_YOUTUBE_WEBHOOK_URL',
-    webhookName: 'YouTube Monitor',
-    reason: 'YouTube Duyuru Botu Webhook',
-  });
-  await setupMonitorAnnouncementChannel(guild, {
-    channelName: 'tiktok-duyuru',
-    topic: '🎵 TikTok video duyuruları',
-    channelEnv: 'DISCORD_TIKTOK_CHANNEL_ID',
-    webhookEnv: 'DISCORD_TIKTOK_WEBHOOK_URL',
-    webhookName: 'TikTok Monitor',
-    reason: 'TikTok Duyuru Botu Webhook',
-  });
+  try {
+    const category = await findOrCreateAnnouncementCategory(guild);
+    await setupMonitorAnnouncementChannel(guild, category, {
+      channelName: 'kick-duyuru',
+      topic: '🎬 Kick yayın duyuruları',
+      channelEnv: 'DISCORD_KICK_CHANNEL_ID',
+      webhookEnv: 'DISCORD_KICK_WEBHOOK_URL',
+      legacyWebhookEnv: 'DISCORD_WEBHOOK_URL',
+      webhookName: 'Kick Monitor',
+      reason: 'Kick Duyuru Botu Webhook',
+    });
+    await setupMonitorAnnouncementChannel(guild, category, {
+      channelName: 'youtube-duyuru',
+      topic: '▶️ YouTube video duyuruları',
+      channelEnv: 'DISCORD_YOUTUBE_CHANNEL_ID',
+      webhookEnv: 'DISCORD_YOUTUBE_WEBHOOK_URL',
+      webhookName: 'YouTube Monitor',
+      reason: 'YouTube Duyuru Botu Webhook',
+    });
+    await setupMonitorAnnouncementChannel(guild, category, {
+      channelName: 'tiktok-duyuru',
+      topic: '🎵 TikTok video duyuruları',
+      channelEnv: 'DISCORD_TIKTOK_CHANNEL_ID',
+      webhookEnv: 'DISCORD_TIKTOK_WEBHOOK_URL',
+      webhookName: 'TikTok Monitor',
+      reason: 'TikTok Duyuru Botu Webhook',
+    });
+  } catch (error) {
+    console.error('❌ Duyuru kategorisi hazırlanamadı:', error.message);
+    await logEvent('error', 'Duyuru kategorisi hazırlanamadı.', { Hata: error.message });
+  }
 }
 
 // Bot log kanalı oluştur veya mevcut kanalı bul

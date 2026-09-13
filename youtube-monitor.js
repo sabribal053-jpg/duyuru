@@ -33,6 +33,7 @@ async function checkYouTubeChannel() {
   try {
     const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${CONFIG.YOUTUBE_CHANNEL_ID}`;
     const response = await axios.get(feedUrl, {
+      timeout: 20000,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       },
