@@ -148,6 +148,7 @@ async function sendDiscordNotification(channel) {
       { name: 'Kategori', value: stream.category?.name || 'Bilinmiyor', inline: true },
       { name: 'Yayını İzle', value: `[Kick'te Aç](${streamUrl})`, inline: false }
     )
+    .setFooter({ text: 'Kick Webhook' })
     .setTimestamp();
 
   if (thumbnailUrl) {

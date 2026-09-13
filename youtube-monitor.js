@@ -156,6 +156,7 @@ async function sendYouTubeNotification(video) {
       { name: 'Videoyu İzle', value: `[YouTube'da Aç](${videoUrl})`, inline: false }
     )
     .setImage(`https://img.youtube.com/vi/${video.videoId}/maxresdefault.jpg`)
+    .setFooter({ text: 'YouTube Webhook' })
     .setTimestamp();
 
   if (video.channelName) {

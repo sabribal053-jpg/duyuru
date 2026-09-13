@@ -219,6 +219,8 @@ async function sendTikTokVideoNotification(video) {
       { name: 'Hesap', value: '[@' + CONFIG.USERNAME + '](https://www.tiktok.com/@' + CONFIG.USERNAME + ')', inline: true },
       { name: 'Videoyu İzle', value: "[TikTok'ta Aç](" + videoUrl + ")", inline: false }
     )
+    .setFooter({ text: 'TikTok Webhook' })
+    .setFooter({ text: 'TikTok Live Webhook' })
     .setTimestamp();
   if (video.coverUrl) embed.setImage(video.coverUrl);
   if (video.author) embed.setAuthor({ name: video.author });
