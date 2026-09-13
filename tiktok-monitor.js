@@ -23,7 +23,7 @@ if (!CONFIG.DISCORD_WEBHOOK_URL) {
 
 function normalizePublishedAt(value) {
   if (value === undefined || value === null || value === '') return null;
-  if (/^\\d+$/.test(String(value))) {
+  if (/^\d+$/.test(String(value))) {
     const numeric = Number(value);
     const milliseconds = numeric < 100000000000 ? numeric * 1000 : numeric;
     const date = new Date(milliseconds);
@@ -53,7 +53,7 @@ function collectVideoCandidates(value, candidates, seen, depth = 0) {
   const title = value.desc || value.description || value.title;
   const publishedAt = value.createTime || value.create_time || value.publishedAt || value.published_at;
   const hasVideoData = value.video || value.videoInfo || value.music || value.stats;
-  if (rawId && title && hasVideoData && /^\\d{10,}$/.test(String(rawId))) {
+  if (rawId && title && hasVideoData && /^\d{10,}$/.test(String(rawId))) {
     candidates.push({
       id: String(rawId),
       title: String(title),
@@ -67,7 +67,7 @@ function collectVideoCandidates(value, candidates, seen, depth = 0) {
 
 function extractLatestVideo(html) {
   const candidates = [];
-  const scriptPattern = /<script\\b[^>]*>([\\s\\S]*?)<\\/script>/gi;
+  const scriptPattern = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
   for (const match of html.matchAll(scriptPattern)) {
     const raw = match[1].trim();
     if (!raw.startsWith('{') && !raw.startsWith('[')) continue;
@@ -85,7 +85,7 @@ function extractLatestVideo(html) {
     });
     return candidates[0];
   }
-  const match = html.match(/\\/video\\/(\\d{10,})/);
+  const match = html.match(/\/video\/(\d{10,})/);
   if (!match) return null;
   return { id: match[1], title: 'Yeni TikTok videosu', publishedAt: null, coverUrl: null, author: null };
 }
