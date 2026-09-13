@@ -3,6 +3,7 @@ const { Client, GatewayIntentBits, Collection, ChannelType } = require('discord.
 const fs = require('fs');
 const path = require('path');
 const { logEvent } = require('./bot-logger');
+const { reconnectConfiguredVoice } = require('./voice-manager');
 
 const token = process.env.DISCORD_TOKEN?.trim();
 const guildId = process.env.DISCORD_GUILD_ID?.trim();
@@ -61,6 +62,7 @@ client.once('ready', async () => {
 
     await setupMonitorAnnouncementChannels(guild);
     await setupBotLogChannel(guild);
+    await reconnectConfiguredVoice(guild);
     await logEvent('startup', 'Bot Discord’a başarıyla bağlandı.', {
       Sunucu: guild.name,
     });

@@ -51,6 +51,14 @@ function createDefaultState() {
     },
     events: [],
     notificationClaims: {},
+    voice: {
+      enabled: false,
+      guildId: null,
+      channelId: null,
+      channelName: null,
+      lastConnectedAt: null,
+      lastError: null,
+    },
   };
 }
 
@@ -70,6 +78,7 @@ function loadState() {
       stats: { ...defaultState.stats, ...(savedState.stats || {}) },
       events: Array.isArray(savedState.events) ? savedState.events.slice(0, 100) : [],
       notificationClaims: savedState.notificationClaims && typeof savedState.notificationClaims === 'object' && !Array.isArray(savedState.notificationClaims) ? savedState.notificationClaims : {},
+      voice: { ...defaultState.voice, ...(savedState.voice || {}) },
     };
   } catch (error) {
     console.warn('⚠️ Monitör hafızası okunamadı, varsayılan durum kullanılacak:', error.message);
