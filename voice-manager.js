@@ -13,11 +13,19 @@ const { logEvent } = require('./bot-logger');
 
 const voiceChannelTypes = [ChannelType.GuildVoice, ChannelType.GuildStageVoice];
 const reconnectTimers = new Map();
+const intentionalDisconnects = new WeakSet();
+const recoveringConnections = new WeakSet();
 
 function clearReconnectTimer(guildId) {
   const timer = reconnectTimers.get(guildId);
   if (timer) clearTimeout(timer);
   reconnectTimers.delete(guildId);
+}
+
+function destroyConnection(connection) {
+  if (!connection) return;
+  intentionalDisconnects.add(connection);
+  connection.destroy();
 }
 
 function reportVoiceError(message, error) {
@@ -39,6 +47,30 @@ function scheduleReconnect(guild) {
   reconnectTimers.set(guild.id, timer);
 }
 
+async function recoverDisconnectedConnection(connection, guild) {
+  if (intentionalDisconnects.has(connection) || recoveringConnections.has(connection)) return;
+  recoveringConnections.add(connection);
+
+  try {
+    // Discord bazen kısa süreli kopmalarda aynı bağlantıyı kendisi toparlar.
+    await Promise.race([
+      entersState(connection, VoiceConnectionStatus.Signalling, 5000),
+      entersState(connection, VoiceConnectionStatus.Connecting, 5000),
+    ]);
+    await entersState(connection, VoiceConnectionStatus.Ready, 15000);
+    updateState('voice', { lastConnectedAt: new Date().toISOString(), lastError: null });
+    console.log('✅ Discord ses bağlantısı otomatik olarak toparlandı.');
+  } catch (error) {
+    if (!intentionalDisconnects.has(connection)) {
+      reportVoiceError('Discord ses bağlantısı koptu, yeniden bağlanılıyor', error);
+      destroyConnection(connection);
+      scheduleReconnect(guild);
+    }
+  } finally {
+    recoveringConnections.delete(connection);
+  }
+}
+
 function bindConnection(connection, guild) {
   connection.on('error', (error) => {
     updateState('voice', { lastError: error.message });
@@ -46,8 +78,7 @@ function bindConnection(connection, guild) {
   });
 
   connection.on(VoiceConnectionStatus.Disconnected, () => {
-    const state = loadState().voice;
-    if (state?.enabled && state.guildId === guild.id) scheduleReconnect(guild);
+    void recoverDisconnectedConnection(connection, guild);
   });
 }
 
@@ -69,7 +100,7 @@ async function connectToVoiceChannel(guild, channelId) {
   clearReconnectTimer(guild.id);
 
   const existingConnection = getVoiceConnection(guild.id);
-  if (existingConnection) existingConnection.destroy();
+  if (existingConnection) destroyConnection(existingConnection);
 
   const connection = joinVoiceChannel({
     channelId: channel.id,
@@ -92,7 +123,7 @@ async function connectToVoiceChannel(guild, channelId) {
     });
     return channel;
   } catch (error) {
-    connection.destroy();
+    destroyConnection(connection);
     updateState('voice', { lastError: error.message });
     throw error;
   }
@@ -112,7 +143,7 @@ async function configureVoiceChannel(guild, channel) {
 function disconnectVoice(guildId) {
   clearReconnectTimer(guildId);
   const connection = getVoiceConnection(guildId);
-  if (connection) connection.destroy();
+  if (connection) destroyConnection(connection);
   updateState('voice', { enabled: false, lastError: null });
 }
 
