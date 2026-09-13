@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const { getGuildSettings, saveGuildSettings } = require('../settings-store');
 const { logEvent } = require('../bot-logger');
 
@@ -51,12 +51,12 @@ module.exports = {
 
   async execute(interaction) {
     if (!interaction.guildId) {
-      await interaction.reply({ content: '❌ Bu komut sadece sunucularda kullanılabilir.', ephemeral: true });
+      await interaction.reply({ content: '❌ Bu komut sadece sunucularda kullanılabilir.', flags: MessageFlags.Ephemeral });
       return;
     }
 
     if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-      await interaction.reply({ content: '❌ Bu komutu sadece yöneticiler kullanabilir.', ephemeral: true });
+      await interaction.reply({ content: '❌ Bu komutu sadece yöneticiler kullanabilir.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -73,7 +73,7 @@ module.exports = {
           { name: 'Footer', value: current.footerText || 'Kapalı' },
         )
         .setTimestamp();
-      await interaction.reply({ embeds: [embed], ephemeral: true });
+      await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -81,12 +81,12 @@ module.exports = {
       const input = interaction.options.getString('hex').trim();
       const color = input.startsWith('#') ? input : '#' + input;
       if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
-        await interaction.reply({ content: '❌ Geçerli bir HEX renk girin. Örnek: #00b4ff', ephemeral: true });
+        await interaction.reply({ content: '❌ Geçerli bir HEX renk girin. Örnek: #00b4ff', flags: MessageFlags.Ephemeral });
         return;
       }
       saveGuildSettings(interaction.guildId, { embedColor: color.toLowerCase() });
       await logEvent('settings', interaction.user.tag + ' embed rengini güncelledi.', { Renk: color.toLowerCase() });
-      await interaction.reply({ content: '✅ Embed rengi ' + color.toLowerCase() + ' olarak güncellendi.', ephemeral: true });
+      await interaction.reply({ content: '✅ Embed rengi ' + color.toLowerCase() + ' olarak güncellendi.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -95,7 +95,7 @@ module.exports = {
       const footerText = input.toLowerCase() === 'yok' ? '' : input;
       saveGuildSettings(interaction.guildId, { footerText });
       await logEvent('settings', interaction.user.tag + ' embed footer ayarını güncelledi.', { Footer: footerText || 'Kapalı' });
-      await interaction.reply({ content: footerText ? '✅ Embed footer güncellendi.' : '✅ Embed footer kapatıldı.', ephemeral: true });
+      await interaction.reply({ content: footerText ? '✅ Embed footer güncellendi.' : '✅ Embed footer kapatıldı.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -103,7 +103,7 @@ module.exports = {
       const mention = interaction.options.getString('hedef');
       saveGuildSettings(interaction.guildId, { mention });
       await logEvent('settings', interaction.user.tag + ' mention ayarını güncelledi.', { Mention: mentionLabels[mention] });
-      await interaction.reply({ content: '✅ Duyuru mention ayarı ' + mentionLabels[mention] + ' olarak güncellendi.', ephemeral: true });
+      await interaction.reply({ content: '✅ Duyuru mention ayarı ' + mentionLabels[mention] + ' olarak güncellendi.', flags: MessageFlags.Ephemeral });
     }
   },
 };

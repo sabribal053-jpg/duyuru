@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const { loadState } = require('../monitor-state');
 
 function formatAge(value, staleAfterMs) {
@@ -64,6 +64,6 @@ module.exports = {
       .setFooter({ text: 'Durum bilgisi yerel monitör hafızasından okunuyor' })
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   },
 };

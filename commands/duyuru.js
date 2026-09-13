@@ -3,6 +3,7 @@ const {
   EmbedBuilder,
   PermissionFlagsBits,
   ChannelType,
+  MessageFlags,
 } = require('discord.js');
 const { logEvent } = require('../bot-logger');
 const { DEFAULT_SETTINGS, getGuildSettings } = require('../settings-store');
@@ -43,12 +44,12 @@ module.exports = {
 
   async execute(interaction) {
     if (!interaction.guildId) {
-      await interaction.reply({ content: '❌ Bu komut sadece sunucularda kullanılabilir.', ephemeral: true });
+      await interaction.reply({ content: '❌ Bu komut sadece sunucularda kullanılabilir.', flags: MessageFlags.Ephemeral });
       return;
     }
 
     if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-      await interaction.reply({ content: '❌ Bu komutu sadece yöneticiler kullanabilir.', ephemeral: true });
+      await interaction.reply({ content: '❌ Bu komutu sadece yöneticiler kullanabilir.', flags: MessageFlags.Ephemeral });
       return;
     }
     const channel = interaction.options.getChannel('kanal');
@@ -59,7 +60,7 @@ module.exports = {
     if (!title || !description) {
       await interaction.reply({
         content: '❌ Başlık ve açıklama boş bırakılamaz.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -71,7 +72,7 @@ module.exports = {
       } catch {
         await interaction.reply({
           content: '❌ Görsel adresi geçerli bir HTTP veya HTTPS URL olmalı.',
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }
@@ -112,7 +113,7 @@ module.exports = {
       });
       await interaction.reply({
         content: '✅ Duyuru başarıyla ' + channel + ' kanalına gönderildi!',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     } catch (error) {
       console.error('❌ Duyuru gönderme hatası:', error);
@@ -122,7 +123,7 @@ module.exports = {
       });
       await interaction.reply({
         content: '❌ Duyuru gönderilirken bir hata oluştu. Botun kanalda mesaj gönderme yetkisini kontrol edin.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   },

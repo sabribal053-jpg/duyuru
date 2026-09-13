@@ -2,6 +2,7 @@ const {
   ChannelType,
   EmbedBuilder,
   PermissionFlagsBits,
+  MessageFlags,
   SlashCommandBuilder,
 } = require('discord.js');
 const {
@@ -36,29 +37,30 @@ module.exports = {
 
   async execute(interaction) {
     if (!interaction.guildId) {
-      await interaction.reply({ content: '❌ Bu komut sadece sunucularda kullanılabilir.', ephemeral: true });
+      await interaction.reply({ content: '❌ Bu komut sadece sunucularda kullanılabilir.', flags: MessageFlags.Ephemeral });
       return;
     }
     if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-      await interaction.reply({ content: '❌ Bu komutu sadece yöneticiler kullanabilir.', ephemeral: true });
+      await interaction.reply({ content: '❌ Bu komutu sadece yöneticiler kullanabilir.', flags: MessageFlags.Ephemeral });
       return;
     }
 
     const subcommand = interaction.options.getSubcommand();
     if (subcommand === 'gir') {
       const channel = interaction.options.getChannel('kanal', true);
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       try {
         const connectedChannel = await configureVoiceChannel(interaction.guild, channel);
-        await interaction.reply({ content: '✅ Bot artık ' + connectedChannel + ' ses kanalında.', ephemeral: true });
+        await interaction.editReply({ content: '✅ Bot artık ' + connectedChannel + ' ses kanalında.' });
       } catch (error) {
-        await interaction.reply({ content: '❌ Ses kanalına bağlanılamadı: ' + error.message, ephemeral: true });
+        await interaction.editReply({ content: '❌ Ses kanalına bağlanılamadı: ' + error.message });
       }
       return;
     }
 
     if (subcommand === 'cik') {
       disconnectVoice(interaction.guildId);
-      await interaction.reply({ content: '✅ Bot ses kanalından çıkarıldı.', ephemeral: true });
+      await interaction.reply({ content: '✅ Bot ses kanalından çıkarıldı.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -73,6 +75,6 @@ module.exports = {
       )
       .setTimestamp();
     if (status.lastError) embed.addFields({ name: 'Son hata', value: status.lastError.slice(0, 1024), inline: false });
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   },
 };

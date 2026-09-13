@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, Collection, ChannelType, ActivityType } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, ChannelType, ActivityType, MessageFlags } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 const { logEvent } = require('./bot-logger');
@@ -105,7 +105,7 @@ client.on('interactionCreate', async (interaction) => {
     });
 
     try {
-      const reply = { content: '❌ Komut çalıştırılırken bir hata oluştu!', ephemeral: true };
+      const reply = { content: '❌ Komut çalıştırılırken bir hata oluştu!', flags: MessageFlags.Ephemeral };
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp(reply);
       } else {

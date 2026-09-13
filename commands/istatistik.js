@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const { loadState } = require('../monitor-state');
 
 const eventNames = {
@@ -82,6 +82,6 @@ module.exports = {
       .setFooter({ text: 'İstatistikler proje klasöründe yerel olarak tutuluyor' })
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   },
 };
