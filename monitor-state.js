@@ -3,6 +3,10 @@ const path = require('path');
 
 const dataDirectory = path.join(__dirname, '.data');
 const statePath = path.join(dataDirectory, 'monitor-state.json');
+const lockPath = statePath + '.lock';
+const lockTimeoutMs = 30 * 1000;
+const lockRetryMs = 50;
+const waitBuffer = new SharedArrayBuffer(4);
 
 function createDefaultState() {
   return {
@@ -53,47 +57,117 @@ function loadState() {
   }
 }
 
+function waitForLock() {
+  Atomics.wait(new Int32Array(waitBuffer), 0, 0, lockRetryMs);
+}
+
+function acquireLock() {
+  fs.mkdirSync(dataDirectory, { recursive: true });
+
+  for (let attempt = 0; attempt < lockTimeoutMs / lockRetryMs; attempt += 1) {
+    try {
+      return fs.openSync(lockPath, 'wx');
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+
+      try {
+        const lockAge = Date.now() - fs.statSync(lockPath).mtimeMs;
+        if (lockAge > lockTimeoutMs) fs.unlinkSync(lockPath);
+      } catch (lockError) {
+        if (!['ENOENT', 'EPERM', 'EBUSY'].includes(lockError.code)) throw lockError;
+      }
+
+      waitForLock();
+    }
+  }
+
+  throw new Error('Monitör hafızası kilidi zaman aşımına uğradı.');
+}
+
+function releaseLock(lockFd) {
+  try {
+    fs.closeSync(lockFd);
+  } finally {
+    try {
+      fs.unlinkSync(lockPath);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+}
+
+function withStateLock(callback) {
+  const lockFd = acquireLock();
+  try {
+    return callback();
+  } finally {
+    releaseLock(lockFd);
+  }
+}
+
+function writeState(state) {
+  fs.mkdirSync(dataDirectory, { recursive: true });
+  const tempPath = statePath + '.' + process.pid + '.tmp';
+
+  try {
+    fs.writeFileSync(tempPath, JSON.stringify(state, null, 2) + '
+', 'utf8');
+    try {
+      fs.renameSync(tempPath, statePath);
+    } catch (error) {
+      if (!['EEXIST', 'EPERM'].includes(error.code)) throw error;
+      fs.rmSync(statePath, { force: true });
+      fs.renameSync(tempPath, statePath);
+    }
+  } finally {
+    fs.rmSync(tempPath, { force: true });
+  }
+}
+
 function saveState(state) {
   try {
-    fs.mkdirSync(dataDirectory, { recursive: true });
-    fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + '\n', 'utf8');
+    withStateLock(() => writeState(state));
   } catch (error) {
     console.error('❌ Monitör hafızası kaydedilemedi:', error.message);
   }
 }
 
 function updateState(section, updates) {
-  const state = loadState();
-  state[section] = { ...state[section], ...updates };
-  saveState(state);
-  return state;
+  return withStateLock(() => {
+    const state = loadState();
+    state[section] = { ...state[section], ...updates };
+    writeState(state);
+    return state;
+  });
 }
 
 function recordEvent(type, message, metadata = {}) {
-  const state = loadState();
-  const occurredAt = new Date().toISOString();
-  const counterByType = {
-    manual: 'manualAnnouncements',
-    kick: 'kickNotifications',
-    youtube: 'youtubeNotifications',
-  };
-  const counter = counterByType[type];
+  return withStateLock(() => {
+    const state = loadState();
+    const occurredAt = new Date().toISOString();
+    const counterByType = {
+      manual: 'manualAnnouncements',
+      kick: 'kickNotifications',
+      youtube: 'youtubeNotifications',
+    };
+    const counter = counterByType[type];
 
-  if (counter) {
-    state.stats.totalAnnouncements += 1;
-    state.stats[counter] += 1;
-    state.stats.lastAnnouncementAt = occurredAt;
-  }
+    if (counter) {
+      state.stats.totalAnnouncements += 1;
+      state.stats[counter] += 1;
+      state.stats.lastAnnouncementAt = occurredAt;
+    }
 
-  state.events.unshift({
-    occurredAt,
-    type,
-    message,
-    ...metadata,
+    state.events.unshift({
+      occurredAt,
+      type,
+      message,
+      ...metadata,
+    });
+    state.events = state.events.slice(0, 100);
+    writeState(state);
+    return state;
   });
-  state.events = state.events.slice(0, 100);
-  saveState(state);
-  return state;
 }
 
 module.exports = { loadState, saveState, updateState, recordEvent };
