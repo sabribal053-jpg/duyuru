@@ -7,6 +7,7 @@ const colors = {
   kick: '#53fc18',
   youtube: '#ff0000',
   tiktok: '#fe2c55',
+  tiktokLive: '#ff1744',
   error: '#ff4d4f',
   startup: '#9b59b6',
 };
@@ -16,6 +17,7 @@ const titles = {
   kick: '🔴 Kick Bildirimi',
   youtube: '▶️ YouTube Bildirimi',
   tiktok: '🎵 TikTok Bildirimi',
+  tiktokLive: '🔴 TikTok Canlı Yayın Bildirimi',
   error: '❌ Bot Hatası',
   startup: '✅ Bot Başladı',
 };

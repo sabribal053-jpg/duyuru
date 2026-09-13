@@ -16,8 +16,8 @@ if (!CONFIG.USERNAME) {
 }
 
 if (!CONFIG.DISCORD_TIKTOK_WEBHOOK_URL) {
-  console.error('DISCORD_WEBHOOK_URL .env dosyasında bulunamadı.');
-  console.log("Önce bot.js ile Kick webhook'unun oluşturulmasını sağlayın.");
+  console.error('DISCORD_TIKTOK_WEBHOOK_URL .env dosyasında bulunamadı.');
+  console.log("Önce bot.js ile TikTok webhook'unun oluşturulmasını sağlayın.");
   process.exit(1);
 }
 
@@ -38,6 +38,21 @@ function firstUrl(value) {
   if (Array.isArray(value)) return value.map(firstUrl).find(Boolean) || null;
   if (value && typeof value === 'object') return firstUrl(value.url_list || value.url || value.src || value.uri);
   return null;
+}
+
+function parseEmbeddedData(html) {
+  const documents = [];
+  const scriptPattern = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
+  for (const match of html.matchAll(scriptPattern)) {
+    const raw = match[1].trim();
+    if (!raw.startsWith('{') && !raw.startsWith('[')) continue;
+    try {
+      documents.push(JSON.parse(raw));
+    } catch {
+      // TikTok embeds non-JSON scripts as well; those are ignored.
+    }
+  }
+  return documents;
 }
 
 function collectVideoCandidates(value, candidates, seen, depth = 0) {
@@ -65,18 +80,9 @@ function collectVideoCandidates(value, candidates, seen, depth = 0) {
   for (const child of Object.values(value)) collectVideoCandidates(child, candidates, seen, depth + 1);
 }
 
-function extractLatestVideo(html) {
+function extractLatestVideo(documents, html) {
   const candidates = [];
-  const scriptPattern = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
-  for (const match of html.matchAll(scriptPattern)) {
-    const raw = match[1].trim();
-    if (!raw.startsWith('{') && !raw.startsWith('[')) continue;
-    try {
-      collectVideoCandidates(JSON.parse(raw), candidates, new WeakSet());
-    } catch {
-      // TikTok embeds non-JSON scripts as well; those are ignored.
-    }
-  }
+  for (const document of documents) collectVideoCandidates(document, candidates, new WeakSet());
   if (candidates.length > 0) {
     candidates.sort((left, right) => {
       const leftTime = left.publishedAt ? Date.parse(left.publishedAt) : 0;
@@ -90,7 +96,55 @@ function extractLatestVideo(html) {
   return { id: match[1], title: 'Yeni TikTok videosu', publishedAt: null, coverUrl: null, author: null };
 }
 
-async function fetchLatestVideo() {
+function parseLiveStatus(value) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value > 0;
+  if (value === undefined || value === null) return null;
+  const normalized = String(value).toLowerCase();
+  if (['live', 'online', 'on', 'true', '1', '2'].includes(normalized)) return true;
+  if (['offline', 'off', 'false', '0'].includes(normalized)) return false;
+  return null;
+}
+
+function collectLiveCandidates(value, candidates, seen, depth = 0) {
+  if (!value || typeof value !== 'object' || depth > 12 || candidates.length >= 100) return;
+  if (seen.has(value)) return;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    for (const item of value) collectLiveCandidates(item, candidates, seen, depth + 1);
+    return;
+  }
+
+  const liveContainer = value.liveRoomInfo || value.live_room_info || value.liveRoom || value.live_room || value.roomInfo || value.room_info;
+  const roomId = value.roomId || value.room_id || value.liveRoomId || value.live_room_id || liveContainer?.roomId || liveContainer?.room_id || liveContainer?.id;
+  const rawStatus = value.isLive ?? value.is_live ?? value.liveStatus ?? value.live_status ?? value.alive ?? value.roomStatus ?? value.room_status ?? liveContainer?.isLive ?? liveContainer?.status;
+  const hasLiveData = liveContainer !== undefined || rawStatus !== undefined || value.liveTitle !== undefined || value.viewerCount !== undefined;
+
+  if (hasLiveData) {
+    const parsedStatus = parseLiveStatus(rawStatus);
+    candidates.push({
+      known: true,
+      isLive: parsedStatus === null ? Boolean(roomId && liveContainer) : parsedStatus,
+      roomId: roomId ? String(roomId) : null,
+      title: String(value.liveTitle || value.live_title || liveContainer?.title || liveContainer?.roomTitle || ''),
+      coverUrl: firstUrl(value.liveCover || value.live_cover || liveContainer?.cover || liveContainer?.coverUrl),
+      viewers: Number(value.viewerCount || value.viewer_count || liveContainer?.viewerCount || liveContainer?.userCount || 0) || 0,
+      startedAt: normalizePublishedAt(value.liveStartTime || value.live_start_time || liveContainer?.startTime || liveContainer?.createTime),
+    });
+  }
+
+  for (const child of Object.values(value)) collectLiveCandidates(child, candidates, seen, depth + 1);
+}
+
+function extractLiveState(documents) {
+  const candidates = [];
+  for (const document of documents) collectLiveCandidates(document, candidates, new WeakSet());
+  if (candidates.length === 0) return { known: false, isLive: false };
+  const liveCandidate = candidates.find((candidate) => candidate.isLive) || candidates.find((candidate) => candidate.roomId) || candidates[0];
+  return liveCandidate;
+}
+
+async function fetchProfileSnapshot() {
   const profileUrl = 'https://www.tiktok.com/@' + encodeURIComponent(CONFIG.USERNAME);
   const response = await axios.get(profileUrl, {
     timeout: 20000,
@@ -99,12 +153,14 @@ async function fetchLatestVideo() {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
     },
   });
-  const video = extractLatestVideo(response.data);
-  if (!video) throw new Error('TikTok profilinden video bilgisi okunamadı');
-  return video;
+  const documents = parseEmbeddedData(response.data);
+  return {
+    video: extractLatestVideo(documents, response.data),
+    live: extractLiveState(documents),
+  };
 }
 
-async function sendTikTokNotification(video) {
+async function sendTikTokVideoNotification(video) {
   const videoUrl = 'https://www.tiktok.com/@' + CONFIG.USERNAME + '/video/' + video.id;
   const embed = new EmbedBuilder()
     .setColor('#fe2c55')
@@ -122,12 +178,70 @@ async function sendTikTokNotification(video) {
   try {
     const webhook = new WebhookClient({ url: CONFIG.DISCORD_TIKTOK_WEBHOOK_URL });
     await webhook.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } });
-    console.log('TikTok duyurusu gönderildi (' + video.id + ')');
+    console.log('TikTok video duyurusu gönderildi (' + video.id + ')');
     return true;
   } catch (error) {
-    console.error('TikTok Discord mesajı gönderilemedi:', error.message);
+    console.error('TikTok video mesajı gönderilemedi:', error.message);
     return false;
   }
+}
+
+async function sendTikTokLiveNotification(live) {
+  const liveUrl = 'https://www.tiktok.com/@' + CONFIG.USERNAME + '/live';
+  const embed = new EmbedBuilder()
+    .setColor('#ff1744')
+    .setTitle('🔴 TikTok canlı yayını başladı!')
+    .setDescription(live.title || '@' + CONFIG.USERNAME + ' şu anda canlı yayında.')
+    .setURL(liveUrl)
+    .addFields(
+      { name: 'Hesap', value: '[@' + CONFIG.USERNAME + '](https://www.tiktok.com/@' + CONFIG.USERNAME + ')', inline: true },
+      { name: 'İzleyici', value: String(live.viewers || 0), inline: true },
+      { name: 'Yayını İzle', value: "[TikTok canlı yayınına git](" + liveUrl + ")", inline: false }
+    )
+    .setTimestamp();
+  if (live.coverUrl) embed.setImage(live.coverUrl);
+
+  try {
+    const webhook = new WebhookClient({ url: CONFIG.DISCORD_TIKTOK_WEBHOOK_URL });
+    await webhook.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } });
+    console.log('TikTok canlı yayın duyurusu gönderildi');
+    return true;
+  } catch (error) {
+    console.error('TikTok canlı yayın mesajı gönderilemedi:', error.message);
+    return false;
+  }
+}
+
+async function syncLiveState(live, checkedAt) {
+  if (!live.known) {
+    updateState('tiktok', { lastLiveCheckAt: checkedAt });
+    return;
+  }
+
+  const previous = loadState().tiktok;
+  if (!live.isLive) {
+    updateState('tiktok', { isLive: false, liveRoomId: null, liveTitle: null, liveViewers: 0, lastLiveCheckAt: checkedAt });
+    return;
+  }
+
+  const newLiveSession = !previous.isLive || (live.roomId && live.roomId !== previous.liveRoomId);
+  if (newLiveSession) {
+    const sent = await sendTikTokLiveNotification(live);
+    updateState('tiktok', {
+      isLive: true,
+      liveRoomId: live.roomId,
+      liveTitle: live.title,
+      liveViewers: live.viewers,
+      liveStartedAt: live.startedAt,
+      lastLiveCheckAt: checkedAt,
+      lastLiveNotificationAt: sent ? checkedAt : previous.lastLiveNotificationAt,
+      lastError: sent ? null : 'Discord TikTok canlı yayın bildirimi gönderilemedi',
+    });
+    if (sent) await logEvent('tiktokLive', 'TikTok canlı yayını duyuruldu.', { Hesap: '@' + CONFIG.USERNAME, Başlık: live.title });
+    return;
+  }
+
+  updateState('tiktok', { isLive: true, liveRoomId: live.roomId || previous.liveRoomId, liveTitle: live.title, liveViewers: live.viewers, lastLiveCheckAt: checkedAt });
 }
 
 let lastVideoId = loadState().tiktok.latestVideoId || null;
@@ -138,7 +252,11 @@ async function checkTikTokProfile() {
   isChecking = true;
   const checkedAt = new Date().toISOString();
   try {
-    const latestVideo = await fetchLatestVideo();
+    const snapshot = await fetchProfileSnapshot();
+    await syncLiveState(snapshot.live, checkedAt);
+    if (!snapshot.video) throw new Error('TikTok profilinden video bilgisi okunamadı');
+    const latestVideo = snapshot.video;
+
     if (!lastVideoId) {
       lastVideoId = latestVideo.id;
       updateState('tiktok', { latestVideoId: latestVideo.id, latestVideoTitle: latestVideo.title, latestPublishedAt: latestVideo.publishedAt, lastCheckAt: checkedAt, lastError: null });
@@ -146,7 +264,7 @@ async function checkTikTokProfile() {
       return;
     }
     if (latestVideo.id !== lastVideoId) {
-      const sent = await sendTikTokNotification(latestVideo);
+      const sent = await sendTikTokVideoNotification(latestVideo);
       if (sent) {
         lastVideoId = latestVideo.id;
         updateState('tiktok', { latestVideoId: latestVideo.id, latestVideoTitle: latestVideo.title, latestPublishedAt: latestVideo.publishedAt, lastCheckAt: checkedAt, lastNotificationAt: checkedAt, lastError: null });
