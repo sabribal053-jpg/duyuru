@@ -23,6 +23,7 @@ if (!CONFIG.DISCORD_KICK_WEBHOOK_URL) {
 const savedKickState = loadState().kick;
 let lastStreamStatus = Boolean(savedKickState.isLive);
 let lastStreamId = savedKickState.streamId || null;
+let activeNotificationKey = savedKickState.notificationKey || null;
 let isChecking = false;
 
 async function checkKickStream() {
@@ -50,20 +51,27 @@ async function checkKickStream() {
     const stream = channel.livestream;
     const isLive = Boolean(stream);
     const streamId = stream?.id == null ? null : String(stream.id);
-    const isNewStream = isLive && (!lastStreamStatus || (streamId && streamId !== lastStreamId));
+    const isNewStream = isLive && !lastStreamStatus;
 
     if (isNewStream) {
-      const notificationKey = 'kick:' + CONFIG.KICK_USERNAME + ':' + (streamId || stream?.started_at || stream?.created_at || stream?.title || 'live');
+      const sessionMarker = stream?.started_at || stream?.created_at || 'active';
+      const notificationKey = 'kick:' + CONFIG.KICK_USERNAME + ':session:' + sessionMarker;
       if (!claimNotification(notificationKey)) {
         lastStreamStatus = true;
         lastStreamId = streamId || lastStreamId;
-        updateState('kick', { isLive: true, streamId: lastStreamId, lastCheckAt: checkedAt, lastError: null });
+        activeNotificationKey = notificationKey;
+        updateState('kick', { isLive: true, streamId: lastStreamId, notificationKey: activeNotificationKey, lastCheckAt: checkedAt, lastError: null });
         console.log('ℹ️ Aynı Kick bildirimi daha önce işlendi; tekrar gönderilmedi.');
         return;
       }
 
       const sent = await sendDiscordNotification(channel);
-      if (!sent) releaseNotification(notificationKey);
+      if (!sent) {
+        releaseNotification(notificationKey);
+        activeNotificationKey = null;
+      } else {
+        activeNotificationKey = notificationKey;
+      }
 
       if (sent) {
         lastStreamStatus = true;
@@ -71,6 +79,7 @@ async function checkKickStream() {
         updateState('kick', {
           isLive: true,
           streamId,
+          notificationKey: activeNotificationKey,
           lastCheckAt: checkedAt,
           lastNotificationAt: checkedAt,
           lastError: null,
@@ -89,12 +98,15 @@ async function checkKickStream() {
       if (lastStreamStatus) {
         console.log(`🔴 ${CONFIG.KICK_USERNAME} yayını sonlandırdı`);
       }
+      if (activeNotificationKey) releaseNotification(activeNotificationKey);
+      activeNotificationKey = null;
 
       lastStreamStatus = false;
       lastStreamId = null;
       updateState('kick', {
         isLive: false,
         streamId: null,
+        notificationKey: null,
         lastCheckAt: checkedAt,
         lastError: null,
       });

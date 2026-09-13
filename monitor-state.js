@@ -13,6 +13,7 @@ function createDefaultState() {
     kick: {
       isLive: false,
       streamId: null,
+      notificationKey: null,
       lastCheckAt: null,
       lastNotificationAt: null,
       lastError: null,
