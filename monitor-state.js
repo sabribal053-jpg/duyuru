@@ -166,6 +166,8 @@ function recordEvent(type, message, metadata = {}) {
       manual: 'manualAnnouncements',
       kick: 'kickNotifications',
       youtube: 'youtubeNotifications',
+      tiktok: 'tiktokNotifications',
+      tiktokLive: 'tiktokLiveNotifications',
     };
     const counter = counterByType[type];
 
