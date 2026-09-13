@@ -31,7 +31,9 @@ node --version
 echo.
 
 echo [2/3] Paketler kuruluyor...
-call npm install
+echo npm registry: https://registry.npmjs.org/
+set "NPM_CONFIG_REGISTRY=https://registry.npmjs.org/"
+call npm install --registry=https://registry.npmjs.org/ --no-audit
 if errorlevel 1 (
     echo.
     echo [HATA] Paket kurulumu basarisiz oldu.
