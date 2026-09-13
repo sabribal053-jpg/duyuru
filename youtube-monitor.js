@@ -10,12 +10,12 @@ const CONFIG = {
   YOUTUBE_USERNAME: 'burakcandilmaç',
   YOUTUBE_CHANNEL_ID: 'UCP3W4DlmAGaEjN1rI2JX6-g', // burakcandilmaç kanalı
   CHECK_INTERVAL: 5 * 60 * 1000, // 5 dakika
-  DISCORD_WEBHOOK_URL: process.env.DISCORD_WEBHOOK_URL,
+  DISCORD_YOUTUBE_WEBHOOK_URL: process.env.DISCORD_YOUTUBE_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL,
 };
 
 // Webhook URL kontrolü
-if (!CONFIG.DISCORD_WEBHOOK_URL) {
-  console.error('❌ DISCORD_WEBHOOK_URL .env dosyasında bulunamadı!');
+if (!CONFIG.DISCORD_YOUTUBE_WEBHOOK_URL) {
+  console.error('❌ DISCORD_YOUTUBE_WEBHOOK_URL .env dosyasında bulunamadı!');
   console.log('💡 Lütfen bot.js ile önce botu çalıştırın:');
   console.log('   npm start');
   process.exit(1);
@@ -153,7 +153,7 @@ async function sendYouTubeNotification(video) {
   }
 
   try {
-    const webhook = new WebhookClient({ url: CONFIG.DISCORD_WEBHOOK_URL });
+    const webhook = new WebhookClient({ url: CONFIG.DISCORD_YOUTUBE_WEBHOOK_URL });
     await webhook.send({
       content: '@everyone',
       embeds: [embed],

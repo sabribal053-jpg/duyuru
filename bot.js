@@ -46,7 +46,7 @@ client.once('ready', async () => {
   const guild = getTargetGuild();
   if (!guild) return;
 
-  await setupKickAnnouncementChannel(guild);
+  await setupMonitorAnnouncementChannels(guild);
   await setupBotLogChannel(guild);
   await logEvent('startup', 'Bot Discord’a başarıyla bağlandı.', {
     Sunucu: guild.name,
@@ -168,36 +168,55 @@ async function findOrCreateWebhook(channel, webhookName, reason) {
   return webhook;
 }
 
-// Kick Duyuru Kanalı Oluştur veya mevcut kanalı bul
-async function setupKickAnnouncementChannel(guild) {
+// Monitör kanallarını oluştur veya mevcut kanalları bul
+async function setupMonitorAnnouncementChannel(guild, options) {
   try {
-    if (!guild) {
-      console.log('⚠️ Bot henüz bir sunucuya eklenmedi');
-      return;
-    }
-
     const channel = await findOrCreateTextChannel(
       guild,
-      'kick-duyuru',
-      '🎬 Kick yayın duyuruları - Burak yayına başladığında otomatik duyuru alırsınız',
-      process.env.DISCORD_KICK_CHANNEL_ID?.trim()
+      options.channelName,
+      options.topic,
+      process.env[options.channelEnv]?.trim()
     );
-    const webhook = await findOrCreateWebhook(
-      channel,
-      'Kick Monitor',
-      'Kick Duyuru Botu Webhook'
-    );
-
-    saveEnvValues({
-      DISCORD_KICK_CHANNEL_ID: channel.id,
-      DISCORD_WEBHOOK_URL: webhook.url,
-    });
-
-    console.log('✅ Kick duyuru ayarları hazır!');
+    const webhook = await findOrCreateWebhook(channel, options.webhookName, options.reason);
+    const envValues = {
+      [options.channelEnv]: channel.id,
+      [options.webhookEnv]: webhook.url,
+    };
+    if (options.legacyWebhookEnv) envValues[options.legacyWebhookEnv] = webhook.url;
+    saveEnvValues(envValues);
+    console.log('✅ #' + options.channelName + ' ayarları hazır!');
   } catch (error) {
-    console.error('❌ Kick kanal oluşturma hatası:', error.message);
-    await logEvent('error', 'Kick duyuru kanalı hazırlanamadı.', { Hata: error.message });
+    console.error('❌ #' + options.channelName + ' kanalı oluşturma hatası:', error.message);
+    await logEvent('error', options.channelName + ' kanalı hazırlanamadı.', { Hata: error.message });
   }
+}
+
+async function setupMonitorAnnouncementChannels(guild) {
+  await setupMonitorAnnouncementChannel(guild, {
+    channelName: 'kick-duyuru',
+    topic: '🎬 Kick yayın duyuruları',
+    channelEnv: 'DISCORD_KICK_CHANNEL_ID',
+    webhookEnv: 'DISCORD_KICK_WEBHOOK_URL',
+    legacyWebhookEnv: 'DISCORD_WEBHOOK_URL',
+    webhookName: 'Kick Monitor',
+    reason: 'Kick Duyuru Botu Webhook',
+  });
+  await setupMonitorAnnouncementChannel(guild, {
+    channelName: 'youtube-duyuru',
+    topic: '▶️ YouTube video duyuruları',
+    channelEnv: 'DISCORD_YOUTUBE_CHANNEL_ID',
+    webhookEnv: 'DISCORD_YOUTUBE_WEBHOOK_URL',
+    webhookName: 'YouTube Monitor',
+    reason: 'YouTube Duyuru Botu Webhook',
+  });
+  await setupMonitorAnnouncementChannel(guild, {
+    channelName: 'tiktok-duyuru',
+    topic: '🎵 TikTok video duyuruları',
+    channelEnv: 'DISCORD_TIKTOK_CHANNEL_ID',
+    webhookEnv: 'DISCORD_TIKTOK_WEBHOOK_URL',
+    webhookName: 'TikTok Monitor',
+    reason: 'TikTok Duyuru Botu Webhook',
+  });
 }
 
 // Bot log kanalı oluştur veya mevcut kanalı bul

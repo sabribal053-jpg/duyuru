@@ -50,10 +50,14 @@ set /a waited=0
 
 :wait_for_webhooks
 set "KICK_WEBHOOK_READY="
+set "YOUTUBE_WEBHOOK_READY="
+set "TIKTOK_WEBHOOK_READY="
 set "LOG_WEBHOOK_READY="
-for /f "tokens=1,* delims==" %%A in ('findstr /b "DISCORD_WEBHOOK_URL=" ".env" 2^>nul') do if not "%%B"=="" set "KICK_WEBHOOK_READY=1"
+for /f "tokens=1,* delims==" %%A in ('findstr /b "DISCORD_KICK_WEBHOOK_URL=" ".env" 2^>nul') do if not "%%B"=="" set "KICK_WEBHOOK_READY=1"
+for /f "tokens=1,* delims==" %%A in ('findstr /b "DISCORD_YOUTUBE_WEBHOOK_URL=" ".env" 2^>nul') do if not "%%B"=="" set "YOUTUBE_WEBHOOK_READY=1"
+for /f "tokens=1,* delims==" %%A in ('findstr /b "DISCORD_TIKTOK_WEBHOOK_URL=" ".env" 2^>nul') do if not "%%B"=="" set "TIKTOK_WEBHOOK_READY=1"
 for /f "tokens=1,* delims==" %%A in ('findstr /b "DISCORD_LOG_WEBHOOK_URL=" ".env" 2^>nul') do if not "%%B"=="" set "LOG_WEBHOOK_READY=1"
-if defined KICK_WEBHOOK_READY if defined LOG_WEBHOOK_READY goto start_monitors
+if defined KICK_WEBHOOK_READY if defined YOUTUBE_WEBHOOK_READY if defined TIKTOK_WEBHOOK_READY if defined LOG_WEBHOOK_READY goto start_monitors
 if %waited% GEQ 60 goto monitor_timeout
 timeout /t 3 /nobreak >nul
 set /a waited+=3

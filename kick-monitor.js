@@ -8,12 +8,12 @@ const { logEvent } = require('./bot-logger');
 const CONFIG = {
   KICK_USERNAME: 'burakcandilmac',
   CHECK_INTERVAL: 2 * 60 * 1000, // 2 dakika
-  DISCORD_WEBHOOK_URL: process.env.DISCORD_WEBHOOK_URL,
+  DISCORD_KICK_WEBHOOK_URL: process.env.DISCORD_KICK_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL,
 };
 
 // Webhook URL kontrolü
-if (!CONFIG.DISCORD_WEBHOOK_URL) {
-  console.error('❌ DISCORD_WEBHOOK_URL .env dosyasında bulunamadı!');
+if (!CONFIG.DISCORD_KICK_WEBHOOK_URL) {
+  console.error('❌ DISCORD_KICK_WEBHOOK_URL .env dosyasında bulunamadı!');
   console.log('💡 Lütfen bot.js ile önce botu çalıştırın:');
   console.log('   npm start');
   process.exit(1);
@@ -127,7 +127,7 @@ async function sendDiscordNotification(channel) {
   }
 
   try {
-    const webhook = new WebhookClient({ url: CONFIG.DISCORD_WEBHOOK_URL });
+    const webhook = new WebhookClient({ url: CONFIG.DISCORD_KICK_WEBHOOK_URL });
     await webhook.send({
       content: '@everyone',
       embeds: [embed],

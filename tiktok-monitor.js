@@ -7,7 +7,7 @@ const { logEvent } = require('./bot-logger');
 const CONFIG = {
   USERNAME: (process.env.TIKTOK_USERNAME || 'burakcan_dlmc').replace(/^@/, '').trim(),
   CHECK_INTERVAL: 5 * 60 * 1000,
-  DISCORD_WEBHOOK_URL: process.env.DISCORD_WEBHOOK_URL,
+  DISCORD_TIKTOK_WEBHOOK_URL: process.env.DISCORD_TIKTOK_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL,
 };
 
 if (!CONFIG.USERNAME) {
@@ -15,7 +15,7 @@ if (!CONFIG.USERNAME) {
   process.exit(1);
 }
 
-if (!CONFIG.DISCORD_WEBHOOK_URL) {
+if (!CONFIG.DISCORD_TIKTOK_WEBHOOK_URL) {
   console.error('DISCORD_WEBHOOK_URL .env dosyasında bulunamadı.');
   console.log("Önce bot.js ile Kick webhook'unun oluşturulmasını sağlayın.");
   process.exit(1);
@@ -120,7 +120,7 @@ async function sendTikTokNotification(video) {
   if (video.author) embed.setAuthor({ name: video.author });
 
   try {
-    const webhook = new WebhookClient({ url: CONFIG.DISCORD_WEBHOOK_URL });
+    const webhook = new WebhookClient({ url: CONFIG.DISCORD_TIKTOK_WEBHOOK_URL });
     await webhook.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } });
     console.log('TikTok duyurusu gönderildi (' + video.id + ')');
     return true;
