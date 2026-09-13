@@ -21,6 +21,46 @@ if (!CONFIG.DISCORD_TIKTOK_WEBHOOK_URL) {
   process.exit(1);
 }
 
+
+let liveConnectionPromise = null;
+
+async function getTikTokLiveConnection() {
+  if (!liveConnectionPromise) {
+    liveConnectionPromise = import('tiktok-live-connector').then(({ TikTokLiveConnection }) =>
+      new TikTokLiveConnection(CONFIG.USERNAME, { fetchRoomInfoOnConnect: false })
+    );
+  }
+  return liveConnectionPromise;
+}
+
+async function fetchTikTokConnectorLiveState() {
+  const connection = await getTikTokLiveConnection();
+  const isLive = await connection.fetchIsLive();
+  if (!isLive) {
+    return { known: true, isLive: false, roomId: null, title: '', coverUrl: null, viewers: 0, startedAt: null };
+  }
+
+  const roomId = await connection.fetchRoomId();
+  let roomInfo = null;
+  try {
+    roomInfo = await connection.fetchRoomInfo(roomId);
+  } catch (error) {
+    console.warn('TikTok Live oda ayrıntıları okunamadı:', error.message);
+  }
+
+  const data = roomInfo?.data || roomInfo || {};
+  const liveRoom = data.liveRoom || data.live_room || data.roomInfo || data.room_info || data.room || {};
+  return {
+    known: true,
+    isLive: true,
+    roomId: String(roomId),
+    title: String(data.title || data.liveTitle || liveRoom.title || liveRoom.roomTitle || ''),
+    coverUrl: firstUrl(data.cover || data.coverUrl || data.liveCover || liveRoom.cover || liveRoom.coverUrl),
+    viewers: Number(data.userCount || data.user_count || data.viewerCount || liveRoom.userCount || liveRoom.viewerCount || 0) || 0,
+    startedAt: normalizePublishedAt(data.startTime || data.start_time || data.createTime || liveRoom.startTime || liveRoom.createTime),
+  };
+}
+
 function normalizePublishedAt(value) {
   if (value === undefined || value === null || value === '') return null;
   if (/^\d+$/.test(String(value))) {
@@ -267,42 +307,53 @@ async function checkTikTokProfile() {
   if (isChecking) return;
   isChecking = true;
   const checkedAt = new Date().toISOString();
-  try {
-    const snapshot = await fetchProfileSnapshot();
-    await syncLiveState(snapshot.live, checkedAt);
-    if (!snapshot.video) throw new Error('TikTok profilinden video bilgisi okunamadı');
-    const latestVideo = snapshot.video;
 
-    if (!lastVideoId) {
-      lastVideoId = latestVideo.id;
-      updateState('tiktok', { latestVideoId: latestVideo.id, latestVideoTitle: latestVideo.title, latestPublishedAt: latestVideo.publishedAt, lastCheckAt: checkedAt, lastError: null });
-      console.log('TikTok başlangıç videosu kaydedildi: ' + latestVideo.id);
-      return;
+  try {
+    try {
+      const live = await fetchTikTokConnectorLiveState();
+      await syncLiveState(live, checkedAt);
+    } catch (liveError) {
+      console.error('TikTok Live kontrol hatası:', liveError.message);
     }
-    if (latestVideo.id !== lastVideoId) {
-      const notificationKey = 'tiktok:video:' + latestVideo.id;
-      if (!claimNotification(notificationKey)) {
+
+    try {
+      const snapshot = await fetchProfileSnapshot();
+      const state = loadState().tiktok;
+      if (snapshot.live?.known && !state.lastLiveCheckAt) await syncLiveState(snapshot.live, checkedAt);
+      if (!snapshot.video) throw new Error('TikTok profilinden video bilgisi okunamadı');
+      const latestVideo = snapshot.video;
+
+      if (!lastVideoId) {
         lastVideoId = latestVideo.id;
         updateState('tiktok', { latestVideoId: latestVideo.id, latestVideoTitle: latestVideo.title, latestPublishedAt: latestVideo.publishedAt, lastCheckAt: checkedAt, lastError: null });
-        console.log('ℹ️ Aynı TikTok video bildirimi daha önce işlendi; tekrar gönderilmedi.');
+        console.log('TikTok başlangıç videosu kaydedildi: ' + latestVideo.id);
         return;
       }
+      if (latestVideo.id !== lastVideoId) {
+        const notificationKey = 'tiktok:video:' + latestVideo.id;
+        if (!claimNotification(notificationKey)) {
+          lastVideoId = latestVideo.id;
+          updateState('tiktok', { latestVideoId: latestVideo.id, latestVideoTitle: latestVideo.title, latestPublishedAt: latestVideo.publishedAt, lastCheckAt: checkedAt, lastError: null });
+          console.log('ℹ️ Aynı TikTok video bildirimi daha önce işlendi; tekrar gönderilmedi.');
+          return;
+        }
 
-      const sent = await sendTikTokVideoNotification(latestVideo);
-      if (!sent) releaseNotification(notificationKey);
-      if (sent) {
-        lastVideoId = latestVideo.id;
-        updateState('tiktok', { latestVideoId: latestVideo.id, latestVideoTitle: latestVideo.title, latestPublishedAt: latestVideo.publishedAt, lastCheckAt: checkedAt, lastNotificationAt: checkedAt, lastError: null });
-        await logEvent('tiktok', 'Yeni TikTok videosu duyuruldu.', { Video: latestVideo.title, Hesap: '@' + CONFIG.USERNAME });
+        const sent = await sendTikTokVideoNotification(latestVideo);
+        if (!sent) releaseNotification(notificationKey);
+        if (sent) {
+          lastVideoId = latestVideo.id;
+          updateState('tiktok', { latestVideoId: latestVideo.id, latestVideoTitle: latestVideo.title, latestPublishedAt: latestVideo.publishedAt, lastCheckAt: checkedAt, lastNotificationAt: checkedAt, lastError: null });
+          await logEvent('tiktok', 'Yeni TikTok videosu duyuruldu.', { Video: latestVideo.title, Hesap: '@' + CONFIG.USERNAME });
+        } else {
+          updateState('tiktok', { lastCheckAt: checkedAt, lastError: 'Discord TikTok bildirimi gönderilemedi' });
+        }
       } else {
-        updateState('tiktok', { lastCheckAt: checkedAt, lastError: 'Discord TikTok bildirimi gönderilemedi' });
+        updateState('tiktok', { latestVideoTitle: latestVideo.title, latestPublishedAt: latestVideo.publishedAt, lastCheckAt: checkedAt, lastError: null });
       }
-    } else {
-      updateState('tiktok', { latestVideoTitle: latestVideo.title, latestPublishedAt: latestVideo.publishedAt, lastCheckAt: checkedAt, lastError: null });
+    } catch (videoError) {
+      updateState('tiktok', { lastCheckAt: checkedAt, lastError: videoError.message });
+      console.error('TikTok video kontrol hatası:', videoError.message);
     }
-  } catch (error) {
-    updateState('tiktok', { lastCheckAt: checkedAt, lastError: error.message });
-    console.error('TikTok kontrol hatası:', error.message);
   } finally {
     isChecking = false;
   }
