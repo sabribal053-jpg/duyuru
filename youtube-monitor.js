@@ -9,7 +9,7 @@ const { logEvent } = require('./bot-logger');
 const CONFIG = {
   YOUTUBE_USERNAME: 'burakcandilmaç',
   YOUTUBE_CHANNEL_ID: 'UCP3W4DlmAGaEjN1rI2JX6-g', // burakcandilmaç kanalı
-  CHECK_INTERVAL: 5 * 60 * 1000, // 5 dakika
+  CHECK_INTERVAL: Math.max(10, Number(process.env.YOUTUBE_CHECK_INTERVAL_SECONDS) || 60) * 1000, // varsayılan 60 saniye
   DISCORD_YOUTUBE_WEBHOOK_URL: process.env.DISCORD_YOUTUBE_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL,
 };
 

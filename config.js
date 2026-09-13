@@ -19,7 +19,7 @@ module.exports = {
     username: 'burakcandilmac',
 
     // Kontrol sıklığı (dakika cinsinden)
-    checkInterval: 2,
+    checkInterval: 0.5,
 
     // Discord Webhook URL'si
     webhookUrl: process.env.DISCORD_KICK_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL || null,

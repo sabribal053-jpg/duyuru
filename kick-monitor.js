@@ -7,7 +7,7 @@ const { logEvent } = require('./bot-logger');
 // Konfigürasyon
 const CONFIG = {
   KICK_USERNAME: 'burakcandilmac',
-  CHECK_INTERVAL: 2 * 60 * 1000, // 2 dakika
+  CHECK_INTERVAL: Math.max(10, Number(process.env.KICK_CHECK_INTERVAL_SECONDS) || 30) * 1000, // varsayılan 30 saniye
   DISCORD_KICK_WEBHOOK_URL: process.env.DISCORD_KICK_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL,
 };
 

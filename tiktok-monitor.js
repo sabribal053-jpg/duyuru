@@ -6,7 +6,7 @@ const { logEvent } = require('./bot-logger');
 
 const CONFIG = {
   USERNAME: (process.env.TIKTOK_USERNAME || 'burakcan_dlmc').replace(/^@/, '').trim(),
-  CHECK_INTERVAL: 5 * 60 * 1000,
+  CHECK_INTERVAL: Math.max(10, Number(process.env.TIKTOK_CHECK_INTERVAL_SECONDS) || 60) * 1000,
   DISCORD_TIKTOK_WEBHOOK_URL: process.env.DISCORD_TIKTOK_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL,
 };
 
