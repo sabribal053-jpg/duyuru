@@ -1,7 +1,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 
-const scripts = ['kick-monitor.js', 'youtube-monitor.js'];
+const scripts = ['kick-monitor.js', 'youtube-monitor.js', 'tiktok-monitor.js'];
 const children = scripts.map((script) => {
   const child = spawn(process.execPath, [path.join(__dirname, script)], {
     stdio: 'inherit',

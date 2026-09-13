@@ -6,6 +6,7 @@ const colors = {
   manual: '#00b4ff',
   kick: '#53fc18',
   youtube: '#ff0000',
+  tiktok: '#fe2c55',
   error: '#ff4d4f',
   startup: '#9b59b6',
 };
@@ -14,6 +15,7 @@ const titles = {
   manual: '📢 Manuel Duyuru',
   kick: '🔴 Kick Bildirimi',
   youtube: '▶️ YouTube Bildirimi',
+  tiktok: '🎵 TikTok Bildirimi',
   error: '❌ Bot Hatası',
   startup: '✅ Bot Başladı',
 };

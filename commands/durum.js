@@ -32,6 +32,10 @@ module.exports = {
   async execute(interaction) {
     const state = loadState();
     const kickStatus = state.kick.isLive ? '🔴 Canlı' : '⚫ Çevrimdışı';
+    const tiktokUsername = (process.env.TIKTOK_USERNAME || 'burakcan_dlmc').replace(/^@/, '');
+    const latestTikTokVideo = state.tiktok.latestVideoId
+      ? '[' + (state.tiktok.latestVideoTitle || 'Son video') + '](https://www.tiktok.com/@' + tiktokUsername + '/video/' + state.tiktok.latestVideoId + ')'
+      : 'Henüz video kaydedilmedi';
     const latestVideo = state.youtube.latestVideoId
       ? '[' + (state.youtube.latestVideoTitle || 'Son video') + '](https://www.youtube.com/watch?v=' + state.youtube.latestVideoId + ')'
       : 'Henüz video kaydedilmedi';
@@ -43,6 +47,11 @@ module.exports = {
         {
           name: 'Kick Monitörü',
           value: 'Durum: ' + kickStatus + '\nSon kontrol: ' + formatAge(state.kick.lastCheckAt, 10 * 60 * 1000) + errorText(state.kick.lastError),
+          inline: false,
+        },
+        {
+          name: 'TikTok Monitörü',
+          value: 'Son video: ' + latestTikTokVideo + '\nSon kontrol: ' + formatAge(state.tiktok.lastCheckAt, 20 * 60 * 1000) + errorText(state.tiktok.lastError),
           inline: false,
         },
         {

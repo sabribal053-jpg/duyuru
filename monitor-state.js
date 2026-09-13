@@ -25,11 +25,20 @@ function createDefaultState() {
       lastNotificationAt: null,
       lastError: null,
     },
+    tiktok: {
+      latestVideoId: null,
+      latestVideoTitle: null,
+      latestPublishedAt: null,
+      lastCheckAt: null,
+      lastNotificationAt: null,
+      lastError: null,
+    },
     stats: {
       totalAnnouncements: 0,
       manualAnnouncements: 0,
       kickNotifications: 0,
       youtubeNotifications: 0,
+      tiktokNotifications: 0,
       lastAnnouncementAt: null,
     },
     events: [],
@@ -48,6 +57,7 @@ function loadState() {
     return {
       kick: { ...defaultState.kick, ...(savedState.kick || {}) },
       youtube: { ...defaultState.youtube, ...(savedState.youtube || {}) },
+      tiktok: { ...defaultState.tiktok, ...(savedState.tiktok || {}) },
       stats: { ...defaultState.stats, ...(savedState.stats || {}) },
       events: Array.isArray(savedState.events) ? savedState.events.slice(0, 100) : [],
     };

@@ -5,6 +5,7 @@ const eventNames = {
   manual: '📢 Manuel',
   kick: '🔴 Kick',
   youtube: '▶️ YouTube',
+  tiktok: '🎵 TikTok',
   error: '❌ Hata',
   startup: '✅ Başlangıç',
 };
@@ -54,6 +55,11 @@ module.exports = {
         {
           name: 'YouTube',
           value: String(stats.youtubeNotifications),
+          inline: true,
+        },
+        {
+          name: 'TikTok',
+          value: String(stats.tiktokNotifications),
           inline: true,
         },
         {
