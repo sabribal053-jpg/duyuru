@@ -6,7 +6,7 @@ const { logEvent } = require('./bot-logger');
 
 const CONFIG = {
   USERNAME: (process.env.TIKTOK_USERNAME || 'burakcan_dlmc').replace(/^@/, '').trim(),
-  CHECK_INTERVAL: Math.max(10, Number(process.env.TIKTOK_CHECK_INTERVAL_SECONDS) || 60) * 1000,
+  CHECK_INTERVAL: Math.min(60, Math.max(10, Number(process.env.TIKTOK_CHECK_INTERVAL_SECONDS) || 60)) * 1000,
   DISCORD_TIKTOK_WEBHOOK_URL: process.env.DISCORD_TIKTOK_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL,
 };
 
@@ -68,10 +68,10 @@ function collectVideoCandidates(value, candidates, seen, depth = 0) {
   const title = value.desc || value.description || value.title;
   const publishedAt = value.createTime || value.create_time || value.publishedAt || value.published_at;
   const hasVideoData = value.video || value.videoInfo || value.music || value.stats;
-  if (rawId && title && hasVideoData && /^\d{10,}$/.test(String(rawId))) {
+  if (rawId && (hasVideoData || title) && /^\d{10,}$/.test(String(rawId))) {
     candidates.push({
       id: String(rawId),
-      title: String(title),
+      title: String(title || 'Yeni TikTok videosu'),
       publishedAt: normalizePublishedAt(publishedAt),
       coverUrl: firstUrl(value.video?.cover || value.video?.dynamicCover || value.cover || value.thumbnail),
       author: value.author?.nickname || value.author?.uniqueId || value.author?.unique_id || null,
@@ -91,7 +91,11 @@ function extractLatestVideo(documents, html) {
     });
     return candidates[0];
   }
-  const match = html.match(/\/video\/(\d{10,})/);
+  const fallbackPatterns = [
+    /(?:\\\/|\/)video(?:\\\/|\/)(\d{10,})/,
+    /[\"'](?:itemId|item_id|videoId|video_id|aweme_id)[\"']\s*:\s*[\"']?(\d{10,})/i,
+  ];
+  const match = fallbackPatterns.map((pattern) => html.match(pattern)).find(Boolean);
   if (!match) return null;
   return { id: match[1], title: 'Yeni TikTok videosu', publishedAt: null, coverUrl: null, author: null };
 }
@@ -153,6 +157,10 @@ async function fetchProfileSnapshot() {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
     },
   });
+  const finalUrl = response.request?.res?.responseUrl || response.request?._redirectable?._currentUrl || response.request?.responseURL || '';
+  if (/\/in\/about(?:[/?#]|$)/i.test(finalUrl)) {
+    throw new Error('TikTok profili bu sunucudan /in/about sayfasına yönlendirildi; public profil verisi erişimi engellendi');
+  }
   const documents = parseEmbeddedData(response.data);
   return {
     video: extractLatestVideo(documents, response.data),
