@@ -8,6 +8,7 @@ const colors = {
   youtube: '#ff0000',
   tiktok: '#fe2c55',
   tiktokLive: '#ff1744',
+  settings: '#f1c40f',
   error: '#ff4d4f',
   startup: '#9b59b6',
 };
@@ -18,12 +19,17 @@ const titles = {
   youtube: '▶️ YouTube Bildirimi',
   tiktok: '🎵 TikTok Bildirimi',
   tiktokLive: '🔴 TikTok Canlı Yayın Bildirimi',
+  settings: '⚙️ Bot Ayarı Değişikliği',
   error: '❌ Bot Hatası',
   startup: '✅ Bot Başladı',
 };
 
 async function logEvent(type, message, metadata = {}) {
-  recordEvent(type, message, metadata);
+  try {
+    recordEvent(type, message, metadata);
+  } catch (error) {
+    console.error('❌ Yerel bot olayı kaydedilemedi:', error.message);
+  }
 
   const webhookUrl = process.env.DISCORD_LOG_WEBHOOK_URL?.trim();
   if (!webhookUrl) {

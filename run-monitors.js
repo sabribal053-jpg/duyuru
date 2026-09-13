@@ -30,8 +30,7 @@ function startMonitor(script) {
     const delay = Math.min(maxRestartDelayMs, restartDelayMs * Math.pow(2, Math.min(attempt - 1, 4)));
     console.error('❌ ' + script + ' durdu (kod: ' + (code ?? 'yok') + ', sinyal: ' + (signal ?? 'yok') + '). ' + (delay / 1000) + ' saniye sonra yeniden başlatılacak.');
 
-    const timer = setTimeout(() => startMonitor(script), delay);
-    if (timer.unref) timer.unref();
+    setTimeout(() => startMonitor(script), delay);
     const resetTimer = setTimeout(() => restartAttempts.set(script, 0), 60000);
     if (resetTimer.unref) resetTimer.unref();
   });

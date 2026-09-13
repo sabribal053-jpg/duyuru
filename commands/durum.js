@@ -27,7 +27,7 @@ function errorText(error) {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('durum')
-    .setDescription('Kick ve YouTube monitörlerinin durumunu gösterir'),
+    .setDescription('Kick, YouTube ve TikTok monitörlerinin durumunu gösterir'),
 
   async execute(interaction) {
     const state = loadState();

@@ -42,6 +42,15 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction) {
+    if (!interaction.guildId) {
+      await interaction.reply({ content: '❌ Bu komut sadece sunucularda kullanılabilir.', ephemeral: true });
+      return;
+    }
+
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+      await interaction.reply({ content: '❌ Bu komutu sadece yöneticiler kullanabilir.', ephemeral: true });
+      return;
+    }
     const channel = interaction.options.getChannel('kanal');
     const title = interaction.options.getString('baslik')?.trim();
     const description = interaction.options.getString('aciklama')?.trim();

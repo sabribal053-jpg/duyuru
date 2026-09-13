@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 /**
  * Discord Duyuru Botu - Konfigürasyon Dosyası
  * Bu dosyayı kendi ihtiyaçlarına göre düzenle
@@ -20,7 +22,7 @@ module.exports = {
     checkInterval: 2,
 
     // Discord Webhook URL'si
-    webhookUrl: process.env.DISCORD_WEBHOOK_URL || null,
+    webhookUrl: process.env.DISCORD_KICK_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL || null,
 
     // Duyuru mesajı özelleştirmesi
     notification: {

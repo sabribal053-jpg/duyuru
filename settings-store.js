@@ -10,6 +10,19 @@ const DEFAULT_SETTINGS = {
   mention: 'none',
 };
 
+function normalizeSettings(settings = {}) {
+  const normalized = { ...DEFAULT_SETTINGS, ...(settings || {}) };
+  if (typeof normalized.embedColor !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(normalized.embedColor)) {
+    normalized.embedColor = DEFAULT_SETTINGS.embedColor;
+  } else {
+    normalized.embedColor = normalized.embedColor.toLowerCase();
+  }
+  if (typeof normalized.footerText !== 'string') normalized.footerText = DEFAULT_SETTINGS.footerText;
+  normalized.footerText = normalized.footerText.slice(0, 2048);
+  if (!['none', 'everyone', 'here'].includes(normalized.mention)) normalized.mention = DEFAULT_SETTINGS.mention;
+  return normalized;
+}
+
 function readAllSettings() {
   try {
     if (!fs.existsSync(SETTINGS_FILE)) return {};
@@ -23,13 +36,13 @@ function readAllSettings() {
 
 function getGuildSettings(guildId) {
   const allSettings = readAllSettings();
-  return { ...DEFAULT_SETTINGS, ...(allSettings[guildId] || {}) };
+  return normalizeSettings(allSettings[guildId]);
 }
 
 function saveGuildSettings(guildId, updates) {
   if (!guildId) throw new Error('Sunucu kimliği bulunamadı.');
   const allSettings = readAllSettings();
-  const nextSettings = { ...DEFAULT_SETTINGS, ...(allSettings[guildId] || {}), ...updates };
+  const nextSettings = normalizeSettings({ ...(allSettings[guildId] || {}), ...updates });
   fs.mkdirSync(DATA_DIR, { recursive: true });
   allSettings[guildId] = nextSettings;
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(allSettings, null, 2) + '\n', 'utf8');

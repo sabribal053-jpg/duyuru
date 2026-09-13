@@ -21,6 +21,18 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
 });
 
+function reportBackgroundError(source, error) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error('❌ ' + source + ':', message);
+  void logEvent('error', source + ' hatası.', { Hata: message }).catch((logError) => {
+    console.error('❌ Arka plan hata kaydı gönderilemedi:', logError.message);
+  });
+}
+
+client.on('error', (error) => reportBackgroundError('Discord istemcisi', error));
+client.on('shardError', (error) => reportBackgroundError('Discord bağlantı katmanı', error));
+process.on('unhandledRejection', (error) => reportBackgroundError('Yakalanmamış Promise hatası', error));
+
 client.commands = new Collection();
 
 // Komutları yükle
@@ -40,17 +52,21 @@ for (const file of commandFiles) {
 }
 
 client.once('ready', async () => {
-  console.log(`✅ Bot başlatıldı: ${client.user.tag}`);
-  console.log(`📝 ${client.commands.size} komut yüklendi`);
+  try {
+    console.log(`✅ Bot başlatıldı: ${client.user.tag}`);
+    console.log(`📝 ${client.commands.size} komut yüklendi`);
 
-  const guild = getTargetGuild();
-  if (!guild) return;
+    const guild = getTargetGuild();
+    if (!guild) return;
 
-  await setupMonitorAnnouncementChannels(guild);
-  await setupBotLogChannel(guild);
-  await logEvent('startup', 'Bot Discord’a başarıyla bağlandı.', {
-    Sunucu: guild.name,
-  });
+    await setupMonitorAnnouncementChannels(guild);
+    await setupBotLogChannel(guild);
+    await logEvent('startup', 'Bot Discord’a başarıyla bağlandı.', {
+      Sunucu: guild.name,
+    });
+  } catch (error) {
+    reportBackgroundError('Bot başlangıç hazırlığı', error);
+  }
 });
 
 client.on('interactionCreate', async (interaction) => {

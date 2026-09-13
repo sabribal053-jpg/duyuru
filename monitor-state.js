@@ -150,43 +150,53 @@ function saveState(state) {
 }
 
 function updateState(section, updates) {
-  return withStateLock(() => {
-    const state = loadState();
-    state[section] = { ...state[section], ...updates };
-    writeState(state);
-    return state;
-  });
+  try {
+    return withStateLock(() => {
+      const state = loadState();
+      state[section] = { ...state[section], ...updates };
+      writeState(state);
+      return state;
+    });
+  } catch (error) {
+    console.error('❌ Monitör durumu güncellenemedi:', error.message);
+    return null;
+  }
 }
 
 function recordEvent(type, message, metadata = {}) {
-  return withStateLock(() => {
-    const state = loadState();
-    const occurredAt = new Date().toISOString();
-    const counterByType = {
-      manual: 'manualAnnouncements',
-      kick: 'kickNotifications',
-      youtube: 'youtubeNotifications',
-      tiktok: 'tiktokNotifications',
-      tiktokLive: 'tiktokLiveNotifications',
-    };
-    const counter = counterByType[type];
+  try {
+    return withStateLock(() => {
+      const state = loadState();
+      const occurredAt = new Date().toISOString();
+      const counterByType = {
+        manual: 'manualAnnouncements',
+        kick: 'kickNotifications',
+        youtube: 'youtubeNotifications',
+        tiktok: 'tiktokNotifications',
+        tiktokLive: 'tiktokLiveNotifications',
+      };
+      const counter = counterByType[type];
 
-    if (counter) {
-      state.stats.totalAnnouncements += 1;
-      state.stats[counter] += 1;
-      state.stats.lastAnnouncementAt = occurredAt;
-    }
+      if (counter) {
+        state.stats.totalAnnouncements += 1;
+        state.stats[counter] += 1;
+        state.stats.lastAnnouncementAt = occurredAt;
+      }
 
-    state.events.unshift({
-      occurredAt,
-      type,
-      message,
-      ...metadata,
+      state.events.unshift({
+        occurredAt,
+        type,
+        message,
+        ...metadata,
+      });
+      state.events = state.events.slice(0, 100);
+      writeState(state);
+      return state;
     });
-    state.events = state.events.slice(0, 100);
-    writeState(state);
-    return state;
-  });
+  } catch (error) {
+    console.error('❌ Monitör olayı kaydedilemedi:', error.message);
+    return null;
+  }
 }
 
 module.exports = { loadState, saveState, updateState, recordEvent };
